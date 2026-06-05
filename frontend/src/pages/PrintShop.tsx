@@ -482,8 +482,8 @@ function InternalUseTab() {
   const toast = useToastStore();
 
   const [searchQuery, setSearchQuery]   = useState('');
-  const [searchResults, setSearchResults] = useState<Product[]>([]);
-  const [searchOpen, setSearchOpen]     = useState(false);
+  const [allProducts, setAllProducts]   = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [cartItems, setCartItems]       = useState<CartItem[]>([]);
   const [purpose, setPurpose]           = useState('');
   const [notes, setNotes]               = useState('');
@@ -496,27 +496,27 @@ function InternalUseTab() {
   const [showView, setShowView]         = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { loadHistory(1); }, []);
-
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setSearchOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    loadHistory(1);
+    loadProducts();
   }, []);
 
-  useEffect(() => {
-    if (!searchQuery.trim()) { setSearchResults([]); setSearchOpen(false); return; }
-    const t = setTimeout(async () => {
-      try {
-        const res = await api.get('/products', { params: { search: searchQuery, limit: 10 } });
-        setSearchResults(res.data.data || []);
-        setSearchOpen(true);
-      } catch { setSearchResults([]); }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  const loadProducts = async () => {
+    setLoadingProducts(true);
+    try {
+      const res = await api.get('/products', { params: { limit: 500 } });
+      setAllProducts(res.data.data || []);
+    } catch { /* silently ignore */ }
+    finally { setLoadingProducts(false); }
+  };
+
+  const filteredProducts = searchQuery.trim()
+    ? allProducts.filter(p =>
+        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (p.sku && p.sku.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (p.barcode && p.barcode.includes(searchQuery))
+      )
+    : allProducts;
 
   const loadHistory = async (page: number) => {
     setLoadingHistory(true);
@@ -530,7 +530,6 @@ function InternalUseTab() {
   };
 
   const addToCart = (product: Product) => {
-    setSearchQuery(''); setSearchOpen(false);
     const existing = cartItems.find(i => i.product_id === product.id);
     if (existing) { updateQty(product.id, existing.quantity + 1); return; }
     const cost = parseFloat(product.avg_cost as any) || 0;
@@ -585,28 +584,39 @@ function InternalUseTab() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: product search + cart */}
-        <div className="space-y-4">
-          <div ref={searchRef} className="relative">
+        {/* Left: product browser + cart */}
+        <div className="space-y-3">
+          <div ref={searchRef}>
             <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
               placeholder={t.printshop_search_placeholder} className={inputCls} />
-            {searchOpen && searchResults.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 z-30 rounded-lg border border-slate-700 bg-slate-800 shadow-xl overflow-hidden max-h-64 overflow-y-auto">
-                {searchResults.map(p => (
-                  <button key={p.id} onClick={() => addToCart(p)}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-slate-700 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-slate-100 truncate">{p.name}</div>
-                      <div className="text-xs text-slate-400">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div>
+          </div>
+
+          {/* Product list */}
+          <div className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
+            <div className="px-3 py-2 border-b border-slate-700 text-xs text-slate-400 font-medium uppercase tracking-wider">
+              {loadingProducts ? 'Loading products…' : `${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''}`}
+            </div>
+            <div className="overflow-y-auto max-h-48">
+              {loadingProducts ? (
+                <div className="py-6 text-center text-slate-500 text-sm">{t.loading}</div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="py-6 text-center text-slate-500 text-sm">No products found</div>
+              ) : filteredProducts.map(p => (
+                <button key={p.id} onClick={() => addToCart(p)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-b border-slate-700/40 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-slate-100 truncate">{p.name}</div>
+                    <div className="text-xs text-slate-400">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-xs text-slate-300">LKR {fmt(parseFloat(p.avg_cost as any) || 0)}</div>
+                    <div className={`text-xs ${Number(p.current_stock) <= 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                      Stock: {Number(p.current_stock).toFixed(2)}
                     </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-xs text-slate-400">Cost: {fmt(parseFloat(p.avg_cost as any) || 0)}</div>
-                      <div className="text-xs text-slate-500">Stock: {p.current_stock}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
