@@ -8,6 +8,249 @@ import { Modal } from '../components/ui/Modal';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AxiosError } from 'axios';
 import { useT } from '../i18n/translations';
+import jsPDF from 'jspdf';
+
+const SHOP_NAME = 'Kalanai Graphics & Print Solutions';
+const SHOP_ADDRESS = '612/2/A, Kandy Road, Eldeniya, Kadawatha';
+const SHOP_PHONE = '0112 927 635 | 0706 812 220';
+
+function downloadSalePDF(sale: Sale) {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+  // ── Dimensions & margins
+  const W = 210, H = 297;
+  const ML = 14, MR = 14; // left / right margin
+  const CW = W - ML - MR; // content width = 182
+
+  // ── Colour palette
+  const C = {
+    navy:    [13, 37, 76]   as [number,number,number],
+    navyMid: [22, 58, 110]  as [number,number,number],
+    blue:    [30, 100, 220] as [number,number,number],
+    steel:   [71, 100, 145] as [number,number,number],
+    rowEven: [244, 247, 252] as [number,number,number],
+    border:  [200, 212, 230] as [number,number,number],
+    text:    [20, 30, 50]   as [number,number,number],
+    muted:   [100, 115, 140] as [number,number,number],
+    white:   [255, 255, 255] as [number,number,number],
+    red:     [200, 40, 40]  as [number,number,number],
+    green:   [22, 140, 70]  as [number,number,number],
+    orange:  [190, 80, 10]  as [number,number,number],
+    orangeBg:[255, 237, 213] as [number,number,number],
+  };
+
+  // ── Helpers
+  const fill  = (c: [number,number,number]) => doc.setFillColor(c[0], c[1], c[2]);
+  const ink   = (c: [number,number,number]) => doc.setTextColor(c[0], c[1], c[2]);
+  const stroke= (c: [number,number,number]) => doc.setDrawColor(c[0], c[1], c[2]);
+  const n     = (v: number | string) => Number(v).toFixed(2);
+  const lkr   = (v: number | string) => `LKR ${n(v)}`;
+  const bold  = () => doc.setFont('helvetica', 'bold');
+  const normal= () => doc.setFont('helvetica', 'normal');
+  const italic= () => doc.setFont('helvetica', 'italic');
+  const sz    = (s: number) => doc.setFontSize(s);
+  const hline = (y: number, x1 = ML, x2 = W - MR, w = 0.3) => {
+    stroke(C.border); doc.setLineWidth(w); doc.line(x1, y, x2, y);
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // 1. HEADER BANNER
+  // ══════════════════════════════════════════════════════════════
+  fill(C.navy); doc.rect(0, 0, W, 42, 'F');
+
+  // Accent bar — right edge stripe
+  fill(C.blue); doc.rect(W - 6, 0, 6, 42, 'F');
+
+  // Shop name
+  bold(); sz(17); ink(C.white);
+  doc.text(SHOP_NAME, ML, 16);
+
+  // Address & phone
+  normal(); sz(8.5); ink([160, 185, 220] as [number,number,number]);
+  doc.text(SHOP_ADDRESS, ML, 24);
+  doc.text(SHOP_PHONE, ML, 30.5);
+
+  // "INVOICE" badge — top right
+  fill(C.blue); doc.rect(W - 58, 8, 46, 16, 'F');
+  bold(); sz(15); ink(C.white);
+  doc.text('INVOICE', W - 35, 19, { align: 'center' });
+
+  // Blue accent line under header
+  fill(C.blue); doc.rect(0, 42, W - 6, 1.5, 'F');
+
+  // ══════════════════════════════════════════════════════════════
+  // 2. META ROW (invoice details)
+  // ══════════════════════════════════════════════════════════════
+  const metaY = 50;
+
+  // Left block: Invoice number + date
+  bold(); sz(8); ink(C.muted); doc.text('INVOICE NO.', ML, metaY);
+  bold(); sz(11); ink(C.navy); doc.text(sale.sale_number, ML, metaY + 6);
+
+  const dateStr = new Date(sale.created_at).toLocaleDateString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+  const timeStr = new Date(sale.created_at).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit',
+  });
+  sz(8); normal(); ink(C.muted);
+  doc.text(`${dateStr}  ${timeStr}`, ML, metaY + 12);
+
+  // Right block: payment method + customer
+  const pmtLabel =
+    sale.payment_method === 'cash'   ? 'Cash' :
+    sale.payment_method === 'card'   ? 'Card' :
+    sale.payment_method === 'mixed'  ? 'Cash + Card' : 'Credit (Pay Later)';
+
+  const rightX = W - MR;
+  bold(); sz(8); ink(C.muted); doc.text('PAYMENT METHOD', rightX, metaY, { align: 'right' });
+  normal(); sz(10); ink(C.navy); doc.text(pmtLabel, rightX, metaY + 6, { align: 'right' });
+
+  if (sale.customer_name) {
+    bold(); sz(8); ink(C.muted); doc.text('CUSTOMER', rightX, metaY + 13, { align: 'right' });
+    normal(); sz(9); ink(C.text); doc.text(sale.customer_name, rightX, metaY + 19, { align: 'right' });
+  }
+
+  // Credit warning badge
+  if (sale.payment_method === 'credit') {
+    fill(C.orangeBg); doc.rect(ML, metaY + 14, 60, 8, 'F');
+    bold(); sz(8); ink(C.orange);
+    doc.text('⚠  CREDIT — PAYMENT PENDING', ML + 2, metaY + 19.5);
+  }
+
+  // Divider under meta
+  hline(metaY + 26, ML, W - MR, 0.5);
+
+  // ══════════════════════════════════════════════════════════════
+  // 3. ITEMS TABLE
+  // ══════════════════════════════════════════════════════════════
+  const TBL_TOP = metaY + 32;
+  const ROW_H   = 8.5;
+
+  // Column x-positions (all right-aligned except # and Description)
+  const COL = {
+    num   : ML,           // left
+    desc  : ML + 10,      // left
+    qty   : ML + 112,     // center
+    price : ML + 142,     // right
+    disc  : ML + 162,     // right  (only if any discounts)
+    total : W - MR,       // right
+  };
+  const hasDiscount = (sale.items || []).some(i => Number(i.item_discount) > 0);
+
+  // Table header background
+  fill(C.navy); doc.rect(ML, TBL_TOP, CW, 9, 'F');
+
+  bold(); sz(8); ink(C.white);
+  doc.text('#',          COL.num  + 1,  TBL_TOP + 6);
+  doc.text('DESCRIPTION',COL.desc,      TBL_TOP + 6);
+  doc.text('QTY',        COL.qty,       TBL_TOP + 6, { align: 'center' });
+  doc.text('UNIT PRICE', COL.price,     TBL_TOP + 6, { align: 'right' });
+  if (hasDiscount) doc.text('DISC.', COL.disc, TBL_TOP + 6, { align: 'right' });
+  doc.text('TOTAL',      COL.total,     TBL_TOP + 6, { align: 'right' });
+
+  // Item rows
+  let rowY = TBL_TOP + 9;
+  normal(); sz(9);
+
+  (sale.items || []).forEach((item, idx) => {
+    const isEven = idx % 2 === 0;
+    if (isEven) { fill(C.rowEven); doc.rect(ML, rowY, CW, ROW_H, 'F'); }
+
+    ink(C.muted);
+    doc.text(String(idx + 1), COL.num + 1, rowY + 5.5);
+
+    ink(C.text); bold();
+    const maxLen = hasDiscount ? 36 : 42;
+    const name = item.product_name.length > maxLen
+      ? item.product_name.slice(0, maxLen - 2) + '..'
+      : item.product_name;
+    doc.text(name, COL.desc, rowY + 5.5);
+
+    normal(); ink(C.text);
+    doc.text(String(Number(item.quantity)), COL.qty, rowY + 5.5, { align: 'center' });
+    doc.text(lkr(item.unit_price),          COL.price, rowY + 5.5, { align: 'right' });
+    if (hasDiscount) {
+      ink(Number(item.item_discount) > 0 ? C.red : C.muted);
+      doc.text(Number(item.item_discount) > 0 ? `-${lkr(item.item_discount)}` : '—',
+        COL.disc, rowY + 5.5, { align: 'right' });
+    }
+    ink(C.text); bold();
+    doc.text(lkr(item.subtotal), COL.total, rowY + 5.5, { align: 'right' });
+
+    rowY += ROW_H;
+  });
+
+  // Bottom border of table
+  hline(rowY, ML, W - MR, 0.4);
+  rowY += 6;
+
+  // ══════════════════════════════════════════════════════════════
+  // 4. TOTALS BLOCK (right-aligned, 75mm wide)
+  // ══════════════════════════════════════════════════════════════
+  const TOT_LEFT = W - MR - 80;
+  const addTotRow = (label: string, value: string, color: [number,number,number] = C.text, isBold = false) => {
+    isBold ? bold() : normal();
+    sz(9); ink(C.muted); doc.text(label, TOT_LEFT, rowY);
+    isBold ? bold() : normal();
+    ink(color); doc.text(value, W - MR, rowY, { align: 'right' });
+    rowY += 6;
+  };
+
+  addTotRow('Subtotal', lkr(sale.subtotal));
+  if (Number(sale.discount_amount) > 0)
+    addTotRow('Discount', `-${lkr(sale.discount_amount)}`, C.red);
+  if (Number(sale.tax_amount) > 0)
+    addTotRow('Tax', lkr(sale.tax_amount));
+
+  rowY += 1;
+  // Total banner
+  fill(C.navy); doc.rect(TOT_LEFT - 4, rowY - 1, W - MR - TOT_LEFT + 4 + MR, 11, 'F');
+  bold(); sz(10); ink(C.white);
+  doc.text('TOTAL DUE', TOT_LEFT, rowY + 7);
+  sz(12);
+  doc.text(lkr(sale.total_amount), W - MR, rowY + 7, { align: 'right' });
+  rowY += 15;
+
+  // Payment breakdown
+  if (Number(sale.cash_tendered) > 0) addTotRow('Cash Tendered', lkr(sale.cash_tendered));
+  if (Number(sale.card_amount)   > 0) addTotRow('Card Amount',   lkr(sale.card_amount));
+  if (Number(sale.change_amount) > 0) addTotRow('Change Returned', lkr(sale.change_amount), C.green, true);
+
+  // ══════════════════════════════════════════════════════════════
+  // 5. LEFT SIDE NOTE (if credit)
+  // ══════════════════════════════════════════════════════════════
+  if (sale.payment_method === 'credit') {
+    const noteY = rowY - 30;
+    fill(C.orangeBg);
+    doc.rect(ML, noteY, 85, 22, 'F');
+    stroke(C.orange); doc.setLineWidth(0.5);
+    doc.rect(ML, noteY, 85, 22, 'S');
+    bold(); sz(9); ink(C.orange);
+    doc.text('CREDIT INVOICE', ML + 4, noteY + 7);
+    normal(); sz(8); ink(C.text);
+    doc.text('Payment is pending. Please settle', ML + 4, noteY + 13);
+    doc.text('the balance at your earliest.', ML + 4, noteY + 19);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // 6. FOOTER
+  // ══════════════════════════════════════════════════════════════
+  const FY = H - 20;
+
+  // Full-width footer background
+  fill(C.navy); doc.rect(0, FY - 3, W, 23, 'F');
+  fill(C.blue); doc.rect(0, FY - 3, W, 1.5, 'F');
+
+  bold(); sz(9.5); ink(C.white);
+  doc.text(`Thank you for choosing ${SHOP_NAME}!`, W / 2, FY + 5, { align: 'center' });
+
+  normal(); sz(8); ink([160, 185, 220] as [number,number,number]);
+  doc.text(SHOP_ADDRESS, W / 2, FY + 11, { align: 'center' });
+  doc.text(SHOP_PHONE,   W / 2, FY + 16, { align: 'center' });
+
+  doc.save(`Invoice-${sale.sale_number}.pdf`);
+}
 
 const fmt = (n: number) => `LKR ${Number(n).toFixed(2)}`;
 
@@ -163,11 +406,14 @@ function ReceiptModal({ sale, onClose }: { sale: Sale | null; onClose: () => voi
   if (!sale) return null;
   return (
     <Modal isOpen={!!sale} onClose={onClose} title={t.pos_receipt_title} size="sm">
-      <div className="font-mono text-sm space-y-2 print:text-xs" id="receipt">
+      <div className="font-mono text-sm space-y-2">
+        {/* Shop header */}
         <div className="text-center pb-3 border-b border-dashed border-surface-300">
-          <div className="text-lg font-bold">RetailPOS</div>
-          <div className="text-xs text-surface-500">#{sale.sale_number}</div>
-          <div className="text-xs text-surface-500">{new Date(sale.created_at).toLocaleString()}</div>
+          <div className="text-base font-bold leading-tight">{SHOP_NAME}</div>
+          <div className="text-xs text-surface-500 mt-0.5">{SHOP_ADDRESS}</div>
+          <div className="text-xs text-surface-500">{SHOP_PHONE}</div>
+          <div className="text-xs text-surface-400 mt-2">#{sale.sale_number}</div>
+          <div className="text-xs text-surface-400">{new Date(sale.created_at).toLocaleString()}</div>
           {sale.payment_method === 'credit' && (
             <div className="mt-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-semibold inline-block">
               CREDIT / PAY LATER
@@ -203,8 +449,16 @@ function ReceiptModal({ sale, onClose }: { sale: Sale | null; onClose: () => voi
         </p>
       </div>
 
-      <div className="flex gap-2 mt-4 no-print">
-        <button onClick={() => window.print()} className="btn-secondary flex-1">🖨️ {t.pos_print}</button>
+      <div className="flex gap-2 mt-4">
+        <button
+          onClick={() => downloadSalePDF(sale)}
+          className="btn-secondary flex-1 flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          </svg>
+          Download PDF
+        </button>
         <button onClick={onClose} className="btn-primary flex-1">{t.pos_new_sale}</button>
       </div>
     </Modal>

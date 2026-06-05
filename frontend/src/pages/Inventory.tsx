@@ -47,6 +47,7 @@ export default function Inventory() {
     adjustment_out: { label: t.inventory_move_adj_out, color: 'badge-yellow' },
     return_in: { label: t.inventory_move_return, color: 'badge-green' },
     opening: { label: t.inventory_move_opening, color: 'badge-gray' },
+    internal_use_out: { label: t.inventory_move_internal_use, color: 'badge-yellow' },
   };
   const toast = useToastStore();
   const [tab, setTab] = useState<'stock' | 'movements'>('stock');

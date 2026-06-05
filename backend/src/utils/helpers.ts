@@ -28,6 +28,13 @@ export const generateShiftNumber = (): string => {
   return `SHF-${date}-${rand}`;
 };
 
+export const generateInternalUseNumber = (): string => {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = Math.floor(Math.random() * 9000) + 1000;
+  return `IU-${date}-${rand}`;
+};
+
 export const generateSKU = (): string => {
   return `SKU-${uuidv4().slice(0, 8).toUpperCase()}`;
 };

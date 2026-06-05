@@ -11,6 +11,7 @@ const en = {
   nav_reports: 'Reports',
   nav_shifts: 'Shifts',
   nav_users: 'Users',
+  nav_printshop: 'Print Shop',
 
   // ── Common ───────────────────────────────────────────────────────────────────
   save: 'Save',
@@ -182,6 +183,7 @@ const en = {
   inventory_move_adj_out: 'Adjustment -',
   inventory_move_return: 'Return',
   inventory_move_opening: 'Opening',
+  inventory_move_internal_use: 'Print Shop Use',
 
   // ── GRN ───────────────────────────────────────────────────────────────────────
   grn_title: 'GRN',
@@ -336,6 +338,33 @@ const en = {
   users_pin_placeholder: '4-6 digits',
   users_active: 'Active account',
   users_never: 'Never',
+
+  // ── Print Shop (Internal Use) ─────────────────────────────────────────────
+  printshop_title: 'Print Shop — Internal Use',
+  printshop_new: 'Record Internal Use',
+  printshop_purpose: 'Purpose / Job Description',
+  printshop_purpose_placeholder: 'e.g. Banner printing, Business cards...',
+  printshop_notes: 'Notes (optional)',
+  printshop_search_placeholder: 'Search product by name or barcode...',
+  printshop_add_item: 'Add to List',
+  printshop_col_product: 'Product',
+  printshop_col_qty: 'Quantity',
+  printshop_col_cost: 'Cost Price',
+  printshop_col_subtotal: 'Subtotal',
+  printshop_col_action: 'Action',
+  printshop_total_cost: 'Total Cost (internal)',
+  printshop_submit: 'Record & Deduct Stock',
+  printshop_submitting: 'Recording...',
+  printshop_empty_items: 'No items added yet',
+  printshop_history_title: 'Internal Use History',
+  printshop_col_ref: 'Reference #',
+  printshop_col_purpose: 'Purpose',
+  printshop_col_total: 'Total Cost',
+  printshop_col_by: 'Recorded By',
+  printshop_col_date: 'Date',
+  printshop_no_data: 'No internal use records yet',
+  printshop_view: 'View',
+  printshop_stock_note: 'Stock will be deducted. This will NOT appear in sales or profit reports.',
 };
 
 // ── Sinhala Translations ─────────────────────────────────────────────────────
@@ -350,6 +379,7 @@ const si: typeof en = {
   nav_reports: 'වාර්තා',
   nav_shifts: 'ශිෆ්ට්',
   nav_users: 'පරිශීලකයින්',
+  nav_printshop: 'මුද්‍රණාගාරය',
 
   // Common
   save: 'සුරකින්න',
@@ -521,6 +551,7 @@ const si: typeof en = {
   inventory_move_adj_out: 'සකස් කිරීම -',
   inventory_move_return: 'ආපසු',
   inventory_move_opening: 'ආරම්භක',
+  inventory_move_internal_use: 'මුද්‍රණාගාර භාවිතය',
 
   // GRN
   grn_title: 'භාණ්ඩ ලැබීම',
@@ -675,6 +706,33 @@ const si: typeof en = {
   users_pin_placeholder: 'ඉලක්කම් 4-6',
   users_active: 'ක්‍රියාකාරී ගිණුම',
   users_never: 'කිසිදාක නැත',
+
+  // Print Shop
+  printshop_title: 'මුද්‍රණාගාරය — අභ්‍යන්තර භාවිතය',
+  printshop_new: 'අභ්‍යන්තර භාවිතය වාර්තා කරන්න',
+  printshop_purpose: 'කාර්ය / ජොබ් විස්තරය',
+  printshop_purpose_placeholder: 'උදා: බැනර් මුද්‍රණය, ව්‍යාපාරික කාඩ්...',
+  printshop_notes: 'සටහන් (විකල්ප)',
+  printshop_search_placeholder: 'භාණ්ඩ නාමය හෝ බාර්කෝඩ් සොයන්න...',
+  printshop_add_item: 'ලැයිස්තුවට එකතු',
+  printshop_col_product: 'භාණ්ඩය',
+  printshop_col_qty: 'ප්‍රමාණය',
+  printshop_col_cost: 'පිරිවැය',
+  printshop_col_subtotal: 'උප එකතුව',
+  printshop_col_action: 'ක්‍රියාව',
+  printshop_total_cost: 'මුළු පිරිවැය (අභ්‍යන්තර)',
+  printshop_submit: 'වාර්තා කර තොගය අඩු කරන්න',
+  printshop_submitting: 'වාර්තා කරමින්...',
+  printshop_empty_items: 'භාණ්ඩ එකතු කර නොමැත',
+  printshop_history_title: 'අභ්‍යන්තර භාවිත ඉතිහාසය',
+  printshop_col_ref: 'යොමු #',
+  printshop_col_purpose: 'කාර්ය',
+  printshop_col_total: 'මුළු පිරිවැය',
+  printshop_col_by: 'වාර්තා කළේ',
+  printshop_col_date: 'දිනය',
+  printshop_no_data: 'අභ්‍යන්තර භාවිත වාර්තා නොමැත',
+  printshop_view: 'බලන්න',
+  printshop_stock_note: 'තොගය අඩු වේ. මෙය විකිණුම් හෝ ලාභ වාර්තාවල නොදිස්වේ.',
 };
 
 export type Translations = typeof en;

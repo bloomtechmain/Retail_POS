@@ -40,10 +40,11 @@ afterPack: scripts/after-pack.js
 win:
   icon: build-assets/icon.ico
   target:
-    - target: nsis
+    - target: zip
       arch:
         - x64
   requestedExecutionLevel: asInvoker
+  signAndEditExecutable: false
 
 # NSIS installer wizard settings
 nsis:
