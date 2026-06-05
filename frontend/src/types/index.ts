@@ -203,6 +203,7 @@ export interface DashboardStats {
   open_shift: Shift | null;
   top_products: Array<{ product_name: string; qty_sold: number; revenue: number }>;
   revenue_trend: Array<{ date: string; revenue: number; profit: number }>;
+  printshop_trend: Array<{ date: string; total_cost: number; records: number }>;
 }
 
 export interface PaginatedResponse<T> {

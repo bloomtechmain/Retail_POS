@@ -3,7 +3,7 @@ import { query } from '../config/database';
 export const getDashboardStats = async () => {
   const today = new Date().toISOString().slice(0, 10);
 
-  const [todayStats, monthStats, weekStats, lowStockCount, openShift, topProducts, revenueTrend] =
+  const [todayStats, monthStats, weekStats, lowStockCount, openShift, topProducts, revenueTrend, printshopTrend] =
     await Promise.all([
       query(
         `SELECT
@@ -61,6 +61,16 @@ export const getDashboardStats = async () => {
          ORDER BY date ASC`,
         []
       ),
+      query(
+        `SELECT DATE(created_at) as date,
+           COALESCE(SUM(total_cost),0) as total_cost,
+           COUNT(*) as records
+         FROM internal_use
+         WHERE created_at >= NOW() - INTERVAL '14 days'
+         GROUP BY DATE(created_at)
+         ORDER BY date ASC`,
+        []
+      ),
     ]);
 
   return {
@@ -75,6 +85,7 @@ export const getDashboardStats = async () => {
     open_shift: openShift.rows[0] || null,
     top_products: topProducts.rows,
     revenue_trend: revenueTrend.rows,
+    printshop_trend: printshopTrend.rows,
   };
 };
 
