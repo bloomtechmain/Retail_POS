@@ -24,6 +24,9 @@ export default function GRNPage() {
   const [saving, setSaving] = useState(false);
   const [returnItems, setReturnItems] = useState<Record<number, string>>({});
   const [returnNotes, setReturnNotes] = useState('');
+  const [addSupplierModal, setAddSupplierModal] = useState(false);
+  const [newSupplier, setNewSupplier] = useState({ name: '', contact_person: '', phone: '', email: '', address: '' });
+  const [savingSupplier, setSavingSupplier] = useState(false);
 
   const [form, setForm] = useState({
     supplier_id: '',
@@ -121,6 +124,23 @@ export default function GRNPage() {
     } finally { setSaving(false); }
   };
 
+  const handleAddSupplier = async () => {
+    if (!newSupplier.name.trim()) { toast.error('Supplier name is required'); return; }
+    setSavingSupplier(true);
+    try {
+      const res = await api.post('/grn/suppliers', newSupplier);
+      const created: Supplier = res.data.data;
+      setSuppliers(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setForm(f => ({ ...f, supplier_id: String(created.id) }));
+      setNewSupplier({ name: '', contact_person: '', phone: '', email: '', address: '' });
+      setAddSupplierModal(false);
+      toast.success(`Supplier "${created.name}" added`);
+    } catch (err) {
+      const e = err as AxiosError<{ message: string }>;
+      toast.error(e.response?.data?.message || 'Failed to add supplier');
+    } finally { setSavingSupplier(false); }
+  };
+
   return (
     <PageContainer>
       <div className="page-header">
@@ -189,10 +209,19 @@ export default function GRNPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">{t.grn_form_supplier}</label>
-              <select className="input" value={form.supplier_id} onChange={(e) => setForm(f => ({ ...f, supplier_id: e.target.value }))}>
-                <option value="">{t.grn_form_select_supplier}</option>
-                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select className="input" value={form.supplier_id} onChange={(e) => setForm(f => ({ ...f, supplier_id: e.target.value }))}>
+                  <option value="">{t.grn_form_select_supplier}</option>
+                  {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+                <button type="button" onClick={() => setAddSupplierModal(true)}
+                  title="Add new supplier"
+                  className="shrink-0 w-10 h-10 flex items-center justify-center rounded-lg border border-surface-200 bg-white text-surface-500 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-colors shadow-sm">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div>
               <label className="label">{t.grn_form_invoice}</label>
@@ -378,6 +407,54 @@ export default function GRNPage() {
             </div>
           </div>
         )}
+      </Modal>
+      {/* Add Supplier Modal */}
+      <Modal
+        isOpen={addSupplierModal}
+        onClose={() => setAddSupplierModal(false)}
+        title="Add New Supplier"
+        size="sm"
+        footer={
+          <>
+            <button onClick={() => setAddSupplierModal(false)} className="btn-secondary">{t.cancel}</button>
+            <button onClick={handleAddSupplier} disabled={savingSupplier} className="btn-primary">
+              {savingSupplier ? 'Saving…' : 'Add Supplier'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="label">Name *</label>
+            <input className="input" value={newSupplier.name}
+              onChange={e => setNewSupplier(s => ({ ...s, name: e.target.value }))}
+              placeholder="e.g. ABC Trading Co." autoFocus />
+          </div>
+          <div>
+            <label className="label">Contact Person</label>
+            <input className="input" value={newSupplier.contact_person}
+              onChange={e => setNewSupplier(s => ({ ...s, contact_person: e.target.value }))}
+              placeholder="Optional" />
+          </div>
+          <div>
+            <label className="label">Phone</label>
+            <input className="input" value={newSupplier.phone}
+              onChange={e => setNewSupplier(s => ({ ...s, phone: e.target.value }))}
+              placeholder="Optional" />
+          </div>
+          <div>
+            <label className="label">Email</label>
+            <input type="email" className="input" value={newSupplier.email}
+              onChange={e => setNewSupplier(s => ({ ...s, email: e.target.value }))}
+              placeholder="Optional" />
+          </div>
+          <div>
+            <label className="label">Address</label>
+            <input className="input" value={newSupplier.address}
+              onChange={e => setNewSupplier(s => ({ ...s, address: e.target.value }))}
+              placeholder="Optional" />
+          </div>
+        </div>
       </Modal>
     </PageContainer>
   );
