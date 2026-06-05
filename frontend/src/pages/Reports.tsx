@@ -4,6 +4,7 @@ import { PageContainer } from '../components/layout/Layout';
 import { PageLoader } from '../components/ui/LoadingSpinner';
 import api from '../services/api';
 import { useT } from '../i18n/translations';
+import { useToastStore } from '../store/toastStore';
 
 const fmt = (n: number) => `LKR ${Number(n).toFixed(2)}`;
 const today = new Date().toISOString().slice(0, 10);
@@ -195,11 +196,115 @@ function downloadPrintShopPDF(
   doc.save(`PrintShop-Usage-${dateFrom}-to-${dateTo}.pdf`);
 }
 
+// ── Print Shop Detailed PDF (items per record) ────────────────────────────────
+interface DetailedRecord {
+  id: number;
+  reference_number: string;
+  purpose?: string;
+  notes?: string;
+  total_cost: number;
+  created_by_name: string;
+  created_at: string;
+  items: Array<{
+    id: number;
+    product_name: string;
+    quantity: number;
+    cost_price: number;
+    subtotal: number;
+  }>;
+}
+
+function downloadDetailedPrintShopPDF(
+  records: DetailedRecord[],
+  dateFrom: string,
+  dateTo: string
+) {
+  const { doc, W, ML, MR, fill, ink, bold, normal, sz, header, hline, footer } = makePDF();
+  const CW = W - ML - MR;
+  const PAGE_BOTTOM = 268;
+
+  const addPage = () => {
+    footer();
+    doc.addPage();
+    header('PRINT SHOP\nUSAGE');
+    return 52;
+  };
+
+  header('PRINT SHOP\nUSAGE');
+
+  // Date range + grand total
+  const rangeY = 50;
+  bold(); sz(8); ink(C.muted); doc.text('REPORT PERIOD', ML, rangeY);
+  bold(); sz(11); ink(C.navy);
+  const df = new Date(dateFrom).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const dt = new Date(dateTo).toLocaleDateString('en-GB',   { day: '2-digit', month: 'short', year: 'numeric' });
+  doc.text(`${df}  →  ${dt}`, ML, rangeY + 7);
+  const grandTotal = records.reduce((s, r) => s + Number(r.total_cost || 0), 0);
+  bold(); sz(8); ink(C.muted); doc.text('GRAND TOTAL', W - MR, rangeY, { align: 'right' });
+  bold(); sz(14); ink(C.navy); doc.text(fmt(grandTotal), W - MR, rangeY + 9, { align: 'right' });
+  hline(rangeY + 16, 0.5);
+
+  let y = rangeY + 22;
+
+  for (const rec of records) {
+    const itemCount = rec.items?.length || 0;
+    // Estimate height needed: header(10) + col header(7) + items(8 each) + total(9) + gap(5)
+    const neededH = 10 + 7 + itemCount * 8 + 9 + 5;
+    if (y + neededH > PAGE_BOTTOM) { y = addPage(); }
+
+    // Record header bar
+    fill(C.navy); doc.rect(ML, y, CW, 10, 'F');
+    bold(); sz(8.5); ink(C.white);
+    const refStr = String(rec.reference_number);
+    const purStr = rec.purpose ? (rec.purpose.length > 35 ? rec.purpose.slice(0, 33) + '..' : rec.purpose) : '—';
+    const dateStr = new Date(rec.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    doc.text(refStr,                               ML + 2,        y + 7);
+    doc.text(purStr,                               ML + 42,       y + 7);
+    normal(); sz(7.5); ink(C.steel);
+    doc.text(`by ${rec.created_by_name}`,          ML + 130,      y + 7);
+    bold(); sz(8); ink(C.white);
+    doc.text(dateStr,                              W - MR,        y + 7, { align: 'right' });
+    y += 10;
+
+    // Column headers for items
+    fill(C.even); doc.rect(ML, y, CW, 7, 'F');
+    normal(); sz(7.5); ink(C.muted);
+    doc.text('PRODUCT',   ML + 3,     y + 5);
+    doc.text('QTY',       ML + 110,   y + 5, { align: 'right' });
+    doc.text('UNIT COST', ML + 140,   y + 5, { align: 'right' });
+    doc.text('SUBTOTAL',  W - MR,     y + 5, { align: 'right' });
+    y += 7;
+
+    // Items
+    for (const item of (rec.items || [])) {
+      if (y + 8 > PAGE_BOTTOM) { y = addPage(); }
+      normal(); sz(8.5); ink(C.text);
+      bold(); doc.text(String(item.product_name), ML + 3, y + 5.5);
+      normal();
+      doc.text(Number(item.quantity).toFixed(3),   ML + 110, y + 5.5, { align: 'right' });
+      ink(C.muted); doc.text(fmt(Number(item.cost_price)), ML + 140, y + 5.5, { align: 'right' });
+      bold(); ink(C.navy); doc.text(fmt(Number(item.subtotal)), W - MR, y + 5.5, { align: 'right' });
+      y += 8;
+    }
+
+    // Record total row
+    fill([230, 237, 250] as RGB); doc.rect(ML, y, CW, 9, 'F');
+    bold(); sz(8.5); ink(C.navy);
+    doc.text('Record Total', ML + 3, y + 6.5);
+    doc.text(fmt(Number(rec.total_cost)), W - MR, y + 6.5, { align: 'right' });
+    y += 13;
+  }
+
+  footer();
+  doc.save(`PrintShop-Detailed-${dateFrom}-to-${dateTo}.pdf`);
+}
+
 // ── Report Tab types ──────────────────────────────────────────────────────────
 type ReportTab = 'sales' | 'products' | 'inventory' | 'cashiers' | 'printshop';
 
 export default function Reports() {
   const t = useT();
+  const toast = useToastStore();
   const [tab, setTab] = useState<ReportTab>('sales');
   const [dateFrom, setDateFrom] = useState(firstOfMonth);
   const [dateTo, setDateTo] = useState(today);
@@ -209,6 +314,20 @@ export default function Reports() {
   const [inventoryData, setInventoryData] = useState<unknown[]>([]);
   const [cashiersData, setCashiersData] = useState<unknown[]>([]);
   const [printshopData, setPrintshopData] = useState<Array<Record<string, unknown>>>([]);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
+
+  const handleDetailedPDF = async () => {
+    if (!printshopData.length) return;
+    setGeneratingPDF(true);
+    try {
+      const detailed = await Promise.all(
+        printshopData.map(r => api.get(`/internal-use/${r.id}`).then(res => res.data.data))
+      );
+      downloadDetailedPrintShopPDF(detailed as DetailedRecord[], dateFrom, dateTo);
+    } catch {
+      toast.error('Failed to generate detailed PDF');
+    } finally { setGeneratingPDF(false); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -288,15 +407,26 @@ export default function Reports() {
             </div>
           )}
           {tab === 'printshop' && printshopData.length > 0 && (
-            <div className="pt-5">
-              <button onClick={() => downloadPrintShopPDF(printshopData, dateFrom, dateTo)} className="btn-secondary">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
-                </svg>
-                Download PDF
-              </button>
-            </div>
+            <>
+              <div className="pt-5">
+                <button onClick={() => downloadPrintShopPDF(printshopData, dateFrom, dateTo)} className="btn-secondary">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                  </svg>
+                  Summary PDF
+                </button>
+              </div>
+              <div className="pt-5">
+                <button onClick={handleDetailedPDF} disabled={generatingPDF} className="btn-primary">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                  </svg>
+                  {generatingPDF ? 'Generating…' : 'Detailed PDF (with Items)'}
+                </button>
+              </div>
+            </>
           )}
         </div>
       )}
