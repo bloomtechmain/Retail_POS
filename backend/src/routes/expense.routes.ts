@@ -1,7 +1,9 @@
 import { Router } from 'express';
+import { authenticate } from '../middleware/auth';
 import * as expenseController from '../controllers/expense.controller';
 
 const router = Router();
+router.use(authenticate);
 
 router.get('/',           expenseController.list);
 router.get('/summary',    expenseController.summary);
