@@ -9,6 +9,7 @@ import reportRoutes from './report.routes';
 import shiftRoutes from './shift.routes';
 import userRoutes from './user.routes';
 import internalUseRoutes from './internalUse.routes';
+import expenseRoutes from './expense.routes';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/reports', reportRoutes);
 router.use('/shifts', shiftRoutes);
 router.use('/users', userRoutes);
 router.use('/internal-use', internalUseRoutes);
+router.use('/expenses', expenseRoutes);
 
 export default router;
