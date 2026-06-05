@@ -4,13 +4,14 @@ import api from '../services/api';
 import { useT } from '../i18n/translations';
 import { useToastStore } from '../store/toastStore';
 import { PageContainer } from '../components/layout/Layout';
+import { Modal } from '../components/ui/Modal';
 
 // ── Shop constants (shared with POS receipt)
 const SHOP_NAME    = 'Kalanai Graphics & Print Solutions';
 const SHOP_ADDRESS = '612/2/A, Kandy Road, Eldeniya, Kadawatha';
 const SHOP_PHONE   = '0112 927 635 | 0706 812 220';
 
-// ── Colour palette (shared between both PDF generators)
+// ── Colour palette for PDF only
 type RGB = [number, number, number];
 const C: Record<string, RGB> = {
   navy:    [13,  37,  76],
@@ -22,7 +23,6 @@ const C: Record<string, RGB> = {
   steel:   [160, 185, 220],
   white:   [255, 255, 255],
   red:     [200, 40,  40],
-  green:   [22,  140, 70],
 };
 
 // ─────────────────────────────────────────────
@@ -33,7 +33,7 @@ interface CILine {
   description: string;
   qty: number;
   unit_price: number;
-  discount: number;  // per-line LKR discount
+  discount: number;
 }
 
 interface CIData {
@@ -44,8 +44,8 @@ interface CIData {
   customer_phone: string;
   items: CILine[];
   notes: string;
-  discount_total: number; // bill-level discount
-  tax_rate: number;       // %
+  discount_total: number;
+  tax_rate: number;
 }
 
 function downloadCustomInvoicePDF(data: CIData) {
@@ -64,24 +64,19 @@ function downloadCustomInvoicePDF(data: CIData) {
     stroke(C.border); doc.setLineWidth(lw); doc.line(x1, y, x2, y);
   };
 
-  // ── 1. HEADER BANNER
+  // 1. HEADER BANNER
   fill(C.navy); doc.rect(0, 0, W, 42, 'F');
   fill(C.blue); doc.rect(W - 6, 0, 6, 42, 'F');
-  bold(); sz(17); ink(C.white);
-  doc.text(SHOP_NAME, ML, 16);
+  bold(); sz(17); ink(C.white); doc.text(SHOP_NAME, ML, 16);
   normal(); sz(8.5); ink(C.steel);
   doc.text(SHOP_ADDRESS, ML, 24);
   doc.text(SHOP_PHONE, ML, 30.5);
-  // INVOICE badge
   fill(C.blue); doc.rect(W - 58, 8, 46, 16, 'F');
-  bold(); sz(15); ink(C.white);
-  doc.text('INVOICE', W - 35, 19, { align: 'center' });
-  // accent line
+  bold(); sz(15); ink(C.white); doc.text('INVOICE', W - 35, 19, { align: 'center' });
   fill(C.blue); doc.rect(0, 42, W - 6, 1.5, 'F');
 
-  // ── 2. META
+  // 2. META
   const metaY = 50;
-  // Left: invoice number + date
   bold(); sz(8); ink(C.muted); doc.text('INVOICE NO.', ML, metaY);
   bold(); sz(11); ink(C.navy); doc.text(data.invoice_number, ML, metaY + 6);
   const displayDate = new Date(data.invoice_date).toLocaleDateString('en-GB', {
@@ -89,7 +84,6 @@ function downloadCustomInvoicePDF(data: CIData) {
   });
   normal(); sz(8); ink(C.muted); doc.text(displayDate, ML, metaY + 13);
 
-  // Right: customer info
   const RX = W - MR;
   if (data.customer_name) {
     bold(); sz(8); ink(C.muted); doc.text('BILL TO', RX, metaY, { align: 'right' });
@@ -100,33 +94,23 @@ function downloadCustomInvoicePDF(data: CIData) {
   }
   hline(metaY + 26, ML, W - MR, 0.5);
 
-  // ── 3. ITEMS TABLE
+  // 3. ITEMS TABLE
   const TBL_TOP = metaY + 32;
   const ROW_H   = 8.5;
   const hasDisc = data.items.some(i => i.discount > 0);
+  const COL = { num: ML, desc: ML + 10, qty: ML + 105, price: ML + 135, disc: ML + 158, total: W - MR };
 
-  const COL = {
-    num  : ML,
-    desc : ML + 10,
-    qty  : ML + 105,
-    price: ML + 135,
-    disc : ML + 158,
-    total: W - MR,
-  };
-
-  // Header row
   fill(C.navy); doc.rect(ML, TBL_TOP, CW, 9, 'F');
   bold(); sz(8); ink(C.white);
-  doc.text('#',           COL.num   + 1, TBL_TOP + 6);
-  doc.text('DESCRIPTION', COL.desc,      TBL_TOP + 6);
-  doc.text('QTY',         COL.qty,       TBL_TOP + 6, { align: 'center' });
-  doc.text('UNIT PRICE',  COL.price,     TBL_TOP + 6, { align: 'right' });
+  doc.text('#',           COL.num  + 1, TBL_TOP + 6);
+  doc.text('DESCRIPTION', COL.desc,     TBL_TOP + 6);
+  doc.text('QTY',         COL.qty,      TBL_TOP + 6, { align: 'center' });
+  doc.text('UNIT PRICE',  COL.price,    TBL_TOP + 6, { align: 'right' });
   if (hasDisc) doc.text('DISC.', COL.disc, TBL_TOP + 6, { align: 'right' });
-  doc.text('TOTAL',       COL.total,     TBL_TOP + 6, { align: 'right' });
+  doc.text('TOTAL',       COL.total,    TBL_TOP + 6, { align: 'right' });
 
   let rowY = TBL_TOP + 9;
   normal(); sz(9);
-
   data.items.forEach((item, idx) => {
     if (idx % 2 === 0) { fill(C.rowEven); doc.rect(ML, rowY, CW, ROW_H, 'F'); }
     ink(C.muted); doc.text(String(idx + 1), COL.num + 1, rowY + 5.5);
@@ -147,18 +131,17 @@ function downloadCustomInvoicePDF(data: CIData) {
     doc.text(lkr(lineTotal), COL.total, rowY + 5.5, { align: 'right' });
     rowY += ROW_H;
   });
-
   hline(rowY, ML, W - MR, 0.4); rowY += 6;
 
-  // ── 4. TOTALS BLOCK
-  const itemSubtotal = data.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
+  // 4. TOTALS
+  const itemSubtotal  = data.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
   const itemDiscTotal = data.items.reduce((s, i) => s + i.discount, 0);
   const afterItemDisc = itemSubtotal - itemDiscTotal;
   const afterBillDisc = afterItemDisc - data.discount_total;
-  const taxAmount = (afterBillDisc * data.tax_rate) / 100;
-  const grandTotal = afterBillDisc + taxAmount;
+  const taxAmount     = (afterBillDisc * data.tax_rate) / 100;
+  const grandTotal    = afterBillDisc + taxAmount;
+  const TOT_LEFT      = W - MR - 80;
 
-  const TOT_LEFT = W - MR - 80;
   const addTotRow = (label: string, value: string, color: RGB = C.text, bold_ = false) => {
     bold_ ? bold() : normal(); sz(9);
     ink(C.muted); doc.text(label, TOT_LEFT, rowY);
@@ -166,11 +149,10 @@ function downloadCustomInvoicePDF(data: CIData) {
     doc.text(value, W - MR, rowY, { align: 'right' });
     rowY += 6;
   };
-
   addTotRow('Subtotal', lkr(itemSubtotal));
-  if (itemDiscTotal > 0) addTotRow('Item Discounts', `-${lkr(itemDiscTotal)}`, C.red);
+  if (itemDiscTotal > 0)      addTotRow('Item Discounts', `-${lkr(itemDiscTotal)}`, C.red);
   if (data.discount_total > 0) addTotRow('Bill Discount', `-${lkr(data.discount_total)}`, C.red);
-  if (data.tax_rate > 0) addTotRow(`Tax (${data.tax_rate}%)`, lkr(taxAmount));
+  if (data.tax_rate > 0)      addTotRow(`Tax (${data.tax_rate}%)`, lkr(taxAmount));
 
   rowY += 1;
   fill(C.navy); doc.rect(TOT_LEFT - 4, rowY - 1, W - MR - TOT_LEFT + 4 + MR, 11, 'F');
@@ -178,7 +160,7 @@ function downloadCustomInvoicePDF(data: CIData) {
   sz(12); doc.text(lkr(grandTotal), W - MR, rowY + 7, { align: 'right' });
   rowY += 18;
 
-  // ── 5. NOTES
+  // 5. NOTES
   if (data.notes.trim()) {
     stroke(C.border); doc.setLineWidth(0.3);
     doc.rect(ML, rowY, CW, 0.3, 'F');
@@ -190,7 +172,7 @@ function downloadCustomInvoicePDF(data: CIData) {
     rowY += lines.length * 5;
   }
 
-  // ── 6. FOOTER
+  // 6. FOOTER
   const FY = H - 20;
   fill(C.navy); doc.rect(0, FY - 3, W, 23, 'F');
   fill(C.blue); doc.rect(0, FY - 3, W, 1.5, 'F');
@@ -226,21 +208,16 @@ function CustomInvoiceTab() {
   const [notes, setNotes]                 = useState('');
   const [billDiscount, setBillDiscount]   = useState(0);
   const [taxRate, setTaxRate]             = useState(0);
-
   const [lines, setLines] = useState<CILine[]>([
     { id: 1, description: '', qty: 1, unit_price: 0, discount: 0 },
   ]);
 
   const addLine = () =>
     setLines(prev => [...prev, { id: Date.now(), description: '', qty: 1, unit_price: 0, discount: 0 }]);
-
-  const removeLine = (id: number) =>
-    setLines(prev => prev.filter(l => l.id !== id));
-
+  const removeLine = (id: number) => setLines(prev => prev.filter(l => l.id !== id));
   const updateLine = (id: number, field: keyof CILine, value: string | number) =>
     setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
-  // Live totals
   const itemSubtotal  = lines.reduce((s, l) => s + l.qty * l.unit_price, 0);
   const itemDiscTotal = lines.reduce((s, l) => s + l.discount, 0);
   const afterDiscs    = itemSubtotal - itemDiscTotal - billDiscount;
@@ -250,106 +227,91 @@ function CustomInvoiceTab() {
   const handleDownload = () => {
     if (!customerName.trim()) { toast.error('Customer name is required'); return; }
     if (lines.every(l => !l.description.trim())) { toast.error('Add at least one item'); return; }
-    const validLines = lines.filter(l => l.description.trim());
     downloadCustomInvoicePDF({
       invoice_number  : invoiceNumber,
       invoice_date    : invoiceDate,
       customer_name   : customerName.trim(),
       customer_address: customerAddr.trim(),
       customer_phone  : customerPhone.trim(),
-      items           : validLines,
+      items           : lines.filter(l => l.description.trim()),
       notes           : notes.trim(),
       discount_total  : billDiscount,
       tax_rate        : taxRate,
     });
   };
 
-  const inputCls = 'w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-sky-500';
-  const labelCls = 'block text-xs font-medium text-slate-400 mb-1';
-  const numInput = (val: number, onChange: (v: number) => void, cls = '') =>
-    <input type="number" min={0} step={0.01} value={val || ''} onChange={e => onChange(parseFloat(e.target.value) || 0)}
-      className={`${inputCls} ${cls}`} />;
-
   return (
-    <div className="space-y-6">
-      {/* Invoice meta + customer */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Left: invoice meta */}
-        <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Invoice Details</p>
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Invoice details */}
+        <div className="card p-5 space-y-4">
+          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Invoice Details</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Invoice Number</label>
-              <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
-                className={inputCls} />
+              <label className="label">Invoice Number</label>
+              <input className="input" value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} />
             </div>
             <div>
-              <label className={labelCls}>Invoice Date</label>
-              <input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)}
-                className={inputCls} />
+              <label className="label">Invoice Date</label>
+              <input type="date" className="input" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Bill Discount (LKR)</label>
-              {numInput(billDiscount, setBillDiscount)}
+              <label className="label">Bill Discount (LKR)</label>
+              <input type="number" min={0} step={0.01} className="input"
+                value={billDiscount || ''} onChange={e => setBillDiscount(parseFloat(e.target.value) || 0)} />
             </div>
             <div>
-              <label className={labelCls}>Tax Rate (%)</label>
-              {numInput(taxRate, setTaxRate)}
+              <label className="label">Tax Rate (%)</label>
+              <input type="number" min={0} step={0.1} className="input"
+                value={taxRate || ''} onChange={e => setTaxRate(parseFloat(e.target.value) || 0)} />
             </div>
           </div>
           <div>
-            <label className={labelCls}>Notes / Terms (optional)</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-              placeholder="Payment due within 14 days..."
-              className={`${inputCls} resize-none`} />
+            <label className="label">Notes / Terms</label>
+            <textarea rows={3} className="input resize-none" value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Payment due within 14 days…" />
           </div>
         </div>
 
-        {/* Right: customer */}
-        <div className="rounded-xl border border-slate-700 bg-slate-800/40 p-4 space-y-3">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Bill To</p>
+        {/* Bill To */}
+        <div className="card p-5 space-y-4">
+          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Bill To</p>
           <div>
-            <label className={labelCls}>Customer Name *</label>
-            <input value={customerName} onChange={e => setCustomerName(e.target.value)}
-              placeholder="e.g. ABC Company" className={inputCls} />
+            <label className="label">Customer Name *</label>
+            <input className="input" value={customerName}
+              onChange={e => setCustomerName(e.target.value)} placeholder="e.g. ABC Company" />
           </div>
           <div>
-            <label className={labelCls}>Address</label>
-            <input value={customerAddr} onChange={e => setCustomerAddr(e.target.value)}
-              placeholder="Street, City" className={inputCls} />
+            <label className="label">Address</label>
+            <input className="input" value={customerAddr}
+              onChange={e => setCustomerAddr(e.target.value)} placeholder="Street, City" />
           </div>
           <div>
-            <label className={labelCls}>Phone</label>
-            <input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)}
-              placeholder="07X XXX XXXX" className={inputCls} />
+            <label className="label">Phone</label>
+            <input className="input" value={customerPhone}
+              onChange={e => setCustomerPhone(e.target.value)} placeholder="07X XXX XXXX" />
           </div>
         </div>
       </div>
 
-      {/* Line items table */}
-      <div className="rounded-xl border border-slate-700 bg-slate-800/40 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Line Items</p>
-          <button onClick={addLine}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sky-400 border border-sky-500/40 hover:bg-sky-500/10 transition-colors">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Line
-          </button>
+      {/* Line items */}
+      <div className="card overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-surface-200">
+          <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Line Items</p>
+          <button onClick={addLine} className="btn-ghost btn-sm">+ Add Line</button>
         </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm min-w-[640px]">
+        <div className="table-wrapper">
+          <table className="table min-w-[600px]">
             <thead>
-              <tr className="text-xs text-slate-400 uppercase border-b border-slate-700">
-                <th className="text-left px-4 py-2.5 w-5/12">Description</th>
-                <th className="text-center px-2 py-2.5 w-1/12">Qty</th>
-                <th className="text-right px-3 py-2.5 w-2/12">Unit Price</th>
-                <th className="text-right px-3 py-2.5 w-2/12">Discount</th>
-                <th className="text-right px-3 py-2.5 w-2/12">Total</th>
+              <tr>
+                <th className="w-5/12">Description</th>
+                <th className="text-center w-1/12">Qty</th>
+                <th className="text-right w-2/12">Unit Price</th>
+                <th className="text-right w-2/12">Discount</th>
+                <th className="text-right w-2/12">Total</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
@@ -357,35 +319,33 @@ function CustomInvoiceTab() {
               {lines.map((line, idx) => {
                 const lineTotal = line.qty * line.unit_price - line.discount;
                 return (
-                  <tr key={line.id} className="border-b border-slate-700/50 last:border-0 group">
-                    <td className="px-4 py-2">
+                  <tr key={line.id}>
+                    <td>
                       <input value={line.description}
                         onChange={e => updateLine(line.id, 'description', e.target.value)}
                         placeholder={`Item ${idx + 1}`}
-                        className="w-full bg-transparent text-slate-100 text-sm placeholder-slate-600 focus:outline-none border-b border-transparent focus:border-sky-500 pb-0.5 transition-colors" />
+                        className="w-full bg-transparent text-surface-900 text-sm focus:outline-none border-b border-transparent focus:border-primary-400 pb-0.5 transition-colors placeholder-surface-300" />
                     </td>
-                    <td className="px-2 py-2">
+                    <td className="text-center">
                       <input type="number" min={0.001} step={0.001} value={line.qty || ''}
                         onChange={e => updateLine(line.id, 'qty', parseFloat(e.target.value) || 0)}
-                        className="w-full text-center bg-slate-700/60 rounded px-1.5 py-1 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                        className="w-16 text-center input py-1 text-sm" />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="text-right">
                       <input type="number" min={0} step={0.01} value={line.unit_price || ''}
                         onChange={e => updateLine(line.id, 'unit_price', parseFloat(e.target.value) || 0)}
-                        className="w-full text-right bg-slate-700/60 rounded px-1.5 py-1 text-slate-100 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                        className="w-24 text-right input py-1 text-sm" />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="text-right">
                       <input type="number" min={0} step={0.01} value={line.discount || ''}
                         onChange={e => updateLine(line.id, 'discount', parseFloat(e.target.value) || 0)}
-                        className="w-full text-right bg-slate-700/60 rounded px-1.5 py-1 text-red-400 text-sm focus:outline-none focus:ring-1 focus:ring-sky-500" />
+                        className="w-24 text-right input py-1 text-sm text-red-600" />
                     </td>
-                    <td className="px-3 py-2 text-right font-medium text-slate-200">
-                      {lineTotal.toFixed(2)}
-                    </td>
-                    <td className="pr-2 py-2">
+                    <td className="text-right font-medium">{lineTotal.toFixed(2)}</td>
+                    <td className="pr-2">
                       {lines.length > 1 && (
                         <button onClick={() => removeLine(line.id)}
-                          className="text-slate-600 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                          className="text-surface-300 hover:text-red-500 transition-colors">
                           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
@@ -400,44 +360,36 @@ function CustomInvoiceTab() {
         </div>
 
         {/* Totals summary */}
-        <div className="border-t border-slate-700 bg-slate-800/60 px-4 py-3">
+        <div className="border-t border-surface-200 bg-surface-50 px-5 py-4">
           <div className="flex justify-end">
-            <div className="w-64 space-y-1.5 text-sm">
-              <div className="flex justify-between text-slate-400">
-                <span>Subtotal</span>
-                <span>LKR {itemSubtotal.toFixed(2)}</span>
+            <div className="w-60 space-y-1.5 text-sm">
+              <div className="flex justify-between text-surface-600">
+                <span>Subtotal</span><span>LKR {itemSubtotal.toFixed(2)}</span>
               </div>
               {itemDiscTotal > 0 && (
-                <div className="flex justify-between text-red-400">
-                  <span>Item Discounts</span>
-                  <span>-LKR {itemDiscTotal.toFixed(2)}</span>
+                <div className="flex justify-between text-red-600">
+                  <span>Item Discounts</span><span>-LKR {itemDiscTotal.toFixed(2)}</span>
                 </div>
               )}
               {billDiscount > 0 && (
-                <div className="flex justify-between text-red-400">
-                  <span>Bill Discount</span>
-                  <span>-LKR {billDiscount.toFixed(2)}</span>
+                <div className="flex justify-between text-red-600">
+                  <span>Bill Discount</span><span>-LKR {billDiscount.toFixed(2)}</span>
                 </div>
               )}
               {taxRate > 0 && (
-                <div className="flex justify-between text-slate-400">
-                  <span>Tax ({taxRate}%)</span>
-                  <span>LKR {taxAmount.toFixed(2)}</span>
+                <div className="flex justify-between text-surface-600">
+                  <span>Tax ({taxRate}%)</span><span>LKR {taxAmount.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between font-bold text-slate-100 text-base pt-1.5 border-t border-slate-600">
-                <span>TOTAL</span>
-                <span>LKR {grandTotal.toFixed(2)}</span>
+              <div className="flex justify-between font-bold text-surface-900 text-base pt-2 border-t border-surface-200">
+                <span>TOTAL</span><span>LKR {grandTotal.toFixed(2)}</span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Download button */}
-      <button onClick={handleDownload}
-        className="w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2.5 transition-all hover:opacity-90"
-        style={{ background: 'linear-gradient(90deg, #0d254c 0%, #1e64dc 100%)' }}>
+      <button onClick={handleDownload} className="btn-primary w-full py-3 text-base">
         <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
@@ -449,7 +401,7 @@ function CustomInvoiceTab() {
 }
 
 // ─────────────────────────────────────────────
-// Internal Use Tab (existing logic, extracted)
+// Internal Use Tab
 // ─────────────────────────────────────────────
 interface Product {
   id: number;
@@ -481,19 +433,19 @@ function InternalUseTab() {
   const t = useT();
   const toast = useToastStore();
 
-  const [searchQuery, setSearchQuery]   = useState('');
-  const [allProducts, setAllProducts]   = useState<Product[]>([]);
+  const [searchQuery, setSearchQuery]       = useState('');
+  const [allProducts, setAllProducts]       = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
-  const [cartItems, setCartItems]       = useState<CartItem[]>([]);
-  const [purpose, setPurpose]           = useState('');
-  const [notes, setNotes]               = useState('');
-  const [submitting, setSubmitting]     = useState(false);
-  const [history, setHistory]           = useState<InternalUseRecord[]>([]);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyPage, setHistoryPage]   = useState(1);
+  const [cartItems, setCartItems]           = useState<CartItem[]>([]);
+  const [purpose, setPurpose]               = useState('');
+  const [notes, setNotes]                   = useState('');
+  const [submitting, setSubmitting]         = useState(false);
+  const [history, setHistory]               = useState<InternalUseRecord[]>([]);
+  const [historyTotal, setHistoryTotal]     = useState(0);
+  const [historyPage, setHistoryPage]       = useState(1);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [viewRecord, setViewRecord]     = useState<any>(null);
-  const [showView, setShowView]         = useState(false);
+  const [viewRecord, setViewRecord]         = useState<any>(null);
+  const [showView, setShowView]             = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -571,13 +523,12 @@ function InternalUseTab() {
 
   const fmt = (n: number) => n.toFixed(2);
   const fmtDate = (s: string) => new Date(s).toLocaleString();
-  const inputCls = 'w-full px-4 py-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-sm placeholder-slate-500 focus:outline-none focus:border-sky-500';
 
   return (
     <div className="space-y-6">
       {/* Notice */}
-      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-300 text-sm">
-        <svg className="w-5 h-5 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm">
+        <svg className="w-5 h-5 mt-0.5 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <span>{t.printshop_stock_note}</span>
@@ -585,32 +536,34 @@ function InternalUseTab() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: product browser + cart */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div ref={searchRef}>
             <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-              placeholder={t.printshop_search_placeholder} className={inputCls} />
+              placeholder={t.printshop_search_placeholder} className="input" />
           </div>
 
           {/* Product list */}
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
-            <div className="px-3 py-2 border-b border-slate-700 text-xs text-slate-400 font-medium uppercase tracking-wider">
-              {loadingProducts ? 'Loading products…' : `${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''}`}
+          <div className="card overflow-hidden">
+            <div className="px-4 py-2 border-b border-surface-200 bg-surface-50 text-xs font-semibold text-surface-500 uppercase tracking-wider">
+              {loadingProducts
+                ? 'Loading products…'
+                : `${filteredProducts.length} product${filteredProducts.length !== 1 ? 's' : ''}`}
             </div>
             <div className="overflow-y-auto max-h-48">
               {loadingProducts ? (
-                <div className="py-6 text-center text-slate-500 text-sm">{t.loading}</div>
+                <div className="py-6 text-center text-surface-400 text-sm">{t.loading}</div>
               ) : filteredProducts.length === 0 ? (
-                <div className="py-6 text-center text-slate-500 text-sm">No products found</div>
+                <div className="py-6 text-center text-surface-400 text-sm">No products found</div>
               ) : filteredProducts.map(p => (
                 <button key={p.id} onClick={() => addToCart(p)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-b border-slate-700/40 last:border-0">
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-primary-50/60 transition-colors border-b border-surface-100 last:border-0">
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-slate-100 truncate">{p.name}</div>
-                    <div className="text-xs text-slate-400">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div>
+                    <div className="text-sm font-medium text-surface-900 truncate">{p.name}</div>
+                    <div className="text-xs text-surface-400 font-mono">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-xs text-slate-300">LKR {fmt(parseFloat(p.avg_cost as any) || 0)}</div>
-                    <div className={`text-xs ${Number(p.current_stock) <= 0 ? 'text-red-400' : 'text-slate-500'}`}>
+                    <div className="text-xs text-surface-600">LKR {fmt(parseFloat(p.avg_cost as any) || 0)}</div>
+                    <div className={`text-xs ${Number(p.current_stock) <= 0 ? 'text-red-500' : 'text-surface-400'}`}>
                       Stock: {Number(p.current_stock).toFixed(2)}
                     </div>
                   </div>
@@ -619,46 +572,50 @@ function InternalUseTab() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700 text-xs text-slate-400 uppercase">
-                  <th className="text-left px-3 py-2">{t.printshop_col_product}</th>
-                  <th className="text-center px-2 py-2 w-24">{t.printshop_col_qty}</th>
-                  <th className="text-right px-3 py-2 w-24">{t.printshop_col_subtotal}</th>
-                  <th className="w-8 py-2"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {!cartItems.length ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-slate-500 text-sm">{t.printshop_empty_items}</td></tr>
-                ) : cartItems.map(item => (
-                  <tr key={item.product_id} className="border-b border-slate-700/50 last:border-0">
-                    <td className="px-3 py-2">
-                      <div className="text-slate-200 text-sm truncate max-w-[160px]">{item.product_name}</div>
-                      <div className="text-slate-500 text-xs">@ {fmt(item.cost_price)} each</div>
-                    </td>
-                    <td className="px-2 py-2">
-                      <input type="number" min={0.001} step={0.001} value={item.quantity}
-                        onChange={e => updateQty(item.product_id, parseFloat(e.target.value) || 0)}
-                        className="w-full text-center px-2 py-1 rounded bg-slate-700 border border-slate-600 text-slate-100 text-sm focus:outline-none focus:border-sky-500" />
-                    </td>
-                    <td className="px-3 py-2 text-right text-slate-200">{fmt(item.subtotal)}</td>
-                    <td className="pr-2 py-2">
-                      <button onClick={() => removeItem(item.product_id)} className="text-slate-500 hover:text-red-400 transition-colors">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </td>
+          {/* Cart */}
+          <div className="card overflow-hidden">
+            <div className="table-wrapper">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>{t.printshop_col_product}</th>
+                    <th className="text-center w-24">{t.printshop_col_qty}</th>
+                    <th className="text-right w-24">{t.printshop_col_subtotal}</th>
+                    <th className="w-8"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {!cartItems.length ? (
+                    <tr><td colSpan={4} className="text-center py-8 text-surface-400">{t.printshop_empty_items}</td></tr>
+                  ) : cartItems.map(item => (
+                    <tr key={item.product_id}>
+                      <td>
+                        <div className="font-medium">{item.product_name}</div>
+                        <div className="text-xs text-surface-400">@ LKR {fmt(item.cost_price)} each</div>
+                      </td>
+                      <td className="text-center">
+                        <input type="number" min={0.001} step={0.001} value={item.quantity}
+                          onChange={e => updateQty(item.product_id, parseFloat(e.target.value) || 0)}
+                          className="w-20 text-center input py-1 text-sm" />
+                      </td>
+                      <td className="text-right font-medium">LKR {fmt(item.subtotal)}</td>
+                      <td className="pr-2">
+                        <button onClick={() => removeItem(item.product_id)}
+                          className="text-surface-300 hover:text-red-500 transition-colors">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {cartItems.length > 0 && (
-              <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-700 bg-slate-800">
-                <span className="text-sm text-slate-400">{t.printshop_total_cost}</span>
-                <span className="text-base font-bold text-slate-100">LKR {fmt(totalCost)}</span>
+              <div className="flex items-center justify-between px-4 py-3 border-t border-surface-200 bg-surface-50">
+                <span className="text-sm text-surface-600">{t.printshop_total_cost}</span>
+                <span className="text-base font-bold text-surface-900">LKR {fmt(totalCost)}</span>
               </div>
             )}
           </div>
@@ -667,18 +624,16 @@ function InternalUseTab() {
         {/* Right: purpose / notes / submit */}
         <div className="space-y-4">
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">{t.printshop_purpose}</label>
+            <label className="label">{t.printshop_purpose}</label>
             <input type="text" value={purpose} onChange={e => setPurpose(e.target.value)}
-              placeholder={t.printshop_purpose_placeholder} className={inputCls} />
+              placeholder={t.printshop_purpose_placeholder} className="input" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-400 mb-1.5">{t.printshop_notes}</label>
+            <label className="label">{t.printshop_notes}</label>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
-              className={`${inputCls} resize-none`} />
+              className="input resize-none" />
           </div>
-          <button onClick={handleSubmit} disabled={submitting || !cartItems.length}
-            className="w-full py-3 rounded-lg text-sm font-semibold text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ background: 'linear-gradient(90deg, #0284c7 0%, #0ea5e9 100%)' }}>
+          <button onClick={handleSubmit} disabled={submitting || !cartItems.length} className="btn-primary w-full py-3">
             {submitting ? t.printshop_submitting : t.printshop_submit}
           </button>
         </div>
@@ -686,48 +641,50 @@ function InternalUseTab() {
 
       {/* History */}
       <div>
-        <h2 className="text-base font-semibold text-slate-200 mb-3">{t.printshop_history_title}</h2>
-        <div className="rounded-lg border border-slate-700 bg-slate-800/50 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-700 text-xs text-slate-400 uppercase">
-                <th className="text-left px-4 py-2.5">{t.printshop_col_ref}</th>
-                <th className="text-left px-4 py-2.5">{t.printshop_col_purpose}</th>
-                <th className="text-right px-4 py-2.5">{t.printshop_col_total}</th>
-                <th className="text-left px-4 py-2.5">{t.printshop_col_by}</th>
-                <th className="text-left px-4 py-2.5">{t.printshop_col_date}</th>
-                <th className="px-4 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingHistory ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">{t.loading}</td></tr>
-              ) : !history.length ? (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500">{t.printshop_no_data}</td></tr>
-              ) : history.map(rec => (
-                <tr key={rec.id} className="border-b border-slate-700/50 last:border-0 hover:bg-slate-700/30">
-                  <td className="px-4 py-2.5 text-sky-400 font-mono text-xs">{rec.reference_number}</td>
-                  <td className="px-4 py-2.5 text-slate-300">{rec.purpose || '—'}</td>
-                  <td className="px-4 py-2.5 text-right text-slate-200">LKR {fmt(parseFloat(rec.total_cost as any) || 0)}</td>
-                  <td className="px-4 py-2.5 text-slate-400">{rec.created_by_name}</td>
-                  <td className="px-4 py-2.5 text-slate-500 text-xs">{fmtDate(rec.created_at)}</td>
-                  <td className="px-4 py-2.5">
-                    <button onClick={() => handleView(rec.id)} className="text-xs text-sky-400 hover:text-sky-300 transition-colors">
-                      {t.printshop_view}
-                    </button>
-                  </td>
+        <h2 className="text-base font-semibold text-surface-900 mb-3">{t.printshop_history_title}</h2>
+        <div className="card overflow-hidden">
+          <div className="table-wrapper">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>{t.printshop_col_ref}</th>
+                  <th>{t.printshop_col_purpose}</th>
+                  <th className="text-right">{t.printshop_col_total}</th>
+                  <th>{t.printshop_col_by}</th>
+                  <th>{t.printshop_col_date}</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loadingHistory ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-surface-400">{t.loading}</td></tr>
+                ) : !history.length ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-surface-400">{t.printshop_no_data}</td></tr>
+                ) : history.map(rec => (
+                  <tr key={rec.id}>
+                    <td className="text-primary-600 font-mono text-xs">{rec.reference_number}</td>
+                    <td>{rec.purpose || '—'}</td>
+                    <td className="text-right font-medium">LKR {fmt(parseFloat(rec.total_cost as any) || 0)}</td>
+                    <td className="text-surface-500">{rec.created_by_name}</td>
+                    <td className="text-xs text-surface-400">{fmtDate(rec.created_at)}</td>
+                    <td>
+                      <button onClick={() => handleView(rec.id)} className="btn-ghost btn-sm">
+                        {t.printshop_view}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           {historyTotal > 10 && (
-            <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-700">
-              <span className="text-xs text-slate-500">{historyTotal} total</span>
+            <div className="flex items-center justify-between px-4 py-3 border-t border-surface-200">
+              <span className="text-xs text-surface-500">{historyTotal} total</span>
               <div className="flex gap-2">
                 <button disabled={historyPage <= 1} onClick={() => loadHistory(historyPage - 1)}
-                  className="px-3 py-1 text-xs rounded bg-slate-700 text-slate-300 disabled:opacity-40">Prev</button>
+                  className="btn-secondary btn-sm">Prev</button>
                 <button disabled={historyPage * 10 >= historyTotal} onClick={() => loadHistory(historyPage + 1)}
-                  className="px-3 py-1 text-xs rounded bg-slate-700 text-slate-300 disabled:opacity-40">Next</button>
+                  className="btn-secondary btn-sm">Next</button>
               </div>
             </div>
           )}
@@ -735,50 +692,50 @@ function InternalUseTab() {
       </div>
 
       {/* View modal */}
-      {showView && viewRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-          <div className="w-full max-w-lg rounded-xl bg-slate-900 border border-slate-700 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
-              <h3 className="font-semibold text-slate-100">{viewRecord.reference_number}</h3>
-              <button onClick={() => setShowView(false)} className="text-slate-400 hover:text-white">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <div className="px-6 py-4 space-y-3 text-sm">
+      <Modal isOpen={showView} onClose={() => setShowView(false)}
+        title={viewRecord?.reference_number}
+        size="lg"
+        footer={<button onClick={() => setShowView(false)} className="btn-secondary">Close</button>}>
+        {viewRecord && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 text-sm">
               {[
                 [t.printshop_col_purpose, viewRecord.purpose || '—'],
                 [t.printshop_col_by, viewRecord.created_by_name],
                 [t.printshop_col_date, fmtDate(viewRecord.created_at)],
                 ...(viewRecord.notes ? [[t.notes, viewRecord.notes]] : []),
               ].map(([k, v]) => (
-                <div key={k} className="flex justify-between text-slate-400">
-                  <span>{k}:</span><span className="text-slate-200">{v}</span>
+                <div key={k}>
+                  <span className="text-surface-500">{k}: </span>
+                  <span className="font-medium">{v}</span>
                 </div>
               ))}
-              <div className="mt-3 rounded-lg border border-slate-700 overflow-hidden">
-                <table className="w-full text-xs">
-                  <thead className="bg-slate-800">
-                    <tr className="text-slate-400 uppercase">
-                      <th className="text-left px-3 py-2">{t.printshop_col_product}</th>
-                      <th className="text-center px-2 py-2">{t.printshop_col_qty}</th>
-                      <th className="text-right px-3 py-2">{t.printshop_col_subtotal}</th>
+            </div>
+            <div className="card overflow-hidden">
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>{t.printshop_col_product}</th>
+                      <th className="text-center">{t.printshop_col_qty}</th>
+                      <th className="text-right">{t.printshop_col_subtotal}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {viewRecord.items?.map((item: any) => (
-                      <tr key={item.id} className="border-t border-slate-700">
-                        <td className="px-3 py-2 text-slate-200">{item.product_name}</td>
-                        <td className="px-2 py-2 text-center text-slate-300">{item.quantity}</td>
-                        <td className="px-3 py-2 text-right text-slate-200">LKR {fmt(parseFloat(item.subtotal) || 0)}</td>
+                      <tr key={item.id}>
+                        <td>{item.product_name}</td>
+                        <td className="text-center">{item.quantity}</td>
+                        <td className="text-right font-medium">LKR {fmt(parseFloat(item.subtotal) || 0)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="border-t border-slate-600 bg-slate-800">
-                      <td colSpan={2} className="px-3 py-2 text-slate-400 text-right font-medium">{t.printshop_total_cost}</td>
-                      <td className="px-3 py-2 text-right font-bold text-slate-100">
+                    <tr className="border-t border-surface-200 bg-surface-50">
+                      <td colSpan={2} className="px-4 py-2.5 text-right font-semibold text-surface-700">
+                        {t.printshop_total_cost}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-bold text-primary-700">
                         LKR {fmt(parseFloat(viewRecord.total_cost) || 0)}
                       </td>
                     </tr>
@@ -787,75 +744,47 @@ function InternalUseTab() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────
-// Main PrintShop page with tabs
+// Main PrintShop page
 // ─────────────────────────────────────────────
 type Tab = 'internal-use' | 'custom-invoice';
 
 export default function PrintShop() {
   const [activeTab, setActiveTab] = useState<Tab>('internal-use');
 
-  const tabs: { id: Tab; label: string; icon: JSX.Element }[] = [
-    {
-      id: 'internal-use',
-      label: 'Internal Use',
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-            d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-        </svg>
-      ),
-    },
-    {
-      id: 'custom-invoice',
-      label: 'Custom Invoice',
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-      ),
-    },
+  const tabs: { id: Tab; label: string }[] = [
+    { id: 'internal-use',   label: 'Internal Use' },
+    { id: 'custom-invoice', label: 'Custom Invoice' },
   ];
 
   return (
     <PageContainer>
-      <div className="max-w-6xl mx-auto space-y-5">
-        {/* Page header */}
-        <h1 className="text-xl font-bold text-slate-100">Print Shop</h1>
-
-        {/* Tab bar */}
-        <div className="flex gap-1 p-1 rounded-xl bg-slate-800/60 border border-slate-700 w-fit">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
-                activeTab === tab.id
-                  ? 'text-white shadow-md'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              style={activeTab === tab.id ? {
-                background: 'linear-gradient(90deg, rgba(13,37,76,0.9) 0%, rgba(30,100,220,0.8) 100%)',
-                boxShadow: '0 2px 8px rgba(30,100,220,0.3)',
-              } : {}}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab content */}
-        {activeTab === 'internal-use'   && <InternalUseTab />}
-        {activeTab === 'custom-invoice' && <CustomInvoiceTab />}
+      <div className="page-header">
+        <h1 className="page-title">Print Shop</h1>
       </div>
+
+      {/* Tab bar — same style as Inventory */}
+      <div className="flex gap-1 border-b border-surface-200 mb-6">
+        {tabs.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === tab.id
+                ? 'border-primary-600 text-primary-600'
+                : 'border-transparent text-surface-500 hover:text-surface-700'
+            }`}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'internal-use'   && <InternalUseTab />}
+      {activeTab === 'custom-invoice' && <CustomInvoiceTab />}
     </PageContainer>
   );
 }
