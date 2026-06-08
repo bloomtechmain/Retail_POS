@@ -10,6 +10,7 @@ import shiftRoutes from './shift.routes';
 import userRoutes from './user.routes';
 import internalUseRoutes from './internalUse.routes';
 import expenseRoutes from './expense.routes';
+import printshopInvoiceRoutes from './printshopInvoice.routes';
 
 const router = Router();
 
@@ -24,5 +25,6 @@ router.use('/shifts', shiftRoutes);
 router.use('/users', userRoutes);
 router.use('/internal-use', internalUseRoutes);
 router.use('/expenses', expenseRoutes);
+router.use('/printshop-invoices', printshopInvoiceRoutes);
 
 export default router;

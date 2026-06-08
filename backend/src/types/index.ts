@@ -251,7 +251,8 @@ export interface ReturnSaleItemsPayload {
 }
 
 export interface CartItem {
-  product_id: number;
+  product_id: number | null;
+  is_service?: boolean;
   product_name: string;
   barcode?: string;
   sku: string;

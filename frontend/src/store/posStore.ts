@@ -20,6 +20,7 @@ interface POSStore {
 
   // Actions
   addProduct: (product: Product, qty?: number) => void;
+  addServiceItem: (name: string, qty: number, price: number, discount: number, taxRate: number) => void;
   removeItem: (productId: number) => void;
   updateQty: (productId: number, qty: number) => void;
   updateItemDiscount: (productId: number, discount: number) => void;
@@ -64,6 +65,24 @@ export const usePOSStore = create<POSStore>((set, get) => ({
     const tax = get().taxTotal();
     const billDiscount = get().billDiscount;
     return round2(Math.max(0, subtotal - itemDiscount - billDiscount + tax));
+  },
+
+  addServiceItem: (name, qty, price, discount, taxRate) => {
+    const localId = -(Date.now() + Math.floor(Math.random() * 1000));
+    const newItem: CartItem = {
+      product_id: localId,
+      is_service: true,
+      product_name: name,
+      barcode: undefined,
+      sku: '',
+      quantity: round2(qty),
+      unit_price: round2(price),
+      original_price: round2(price),
+      cost_price: 0,
+      item_discount: round2(discount),
+      tax_rate: taxRate || 0,
+    };
+    set((state) => ({ cart: [...state.cart, newItem] }));
   },
 
   addProduct: (product, qty = 1) => {

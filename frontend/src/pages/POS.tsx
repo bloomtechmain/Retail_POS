@@ -647,6 +647,96 @@ function SaleReturnModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
   );
 }
 
+// ─── Service Item Modal ───────────────────────────────────────────────────────
+function ServiceItemModal({ isOpen, onClose, onAdd }: {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (name: string, qty: number, price: number, discount: number, taxRate: number) => void;
+}) {
+  const [name, setName]         = useState('');
+  const [qty, setQty]           = useState('1');
+  const [price, setPrice]       = useState('');
+  const [discount, setDiscount] = useState('');
+  const [taxRate, setTaxRate]   = useState('0');
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setName(''); setQty('1'); setPrice(''); setDiscount(''); setTaxRate('0');
+      setTimeout(() => nameRef.current?.focus(), 60);
+    }
+  }, [isOpen]);
+
+  const lineTotal = Math.max(0,
+    (parseFloat(qty) || 0) * (parseFloat(price) || 0) - (parseFloat(discount) || 0)
+  );
+
+  const handleAdd = () => {
+    if (!name.trim() || !parseFloat(price)) return;
+    onAdd(name.trim(), parseFloat(qty) || 1, parseFloat(price) || 0, parseFloat(discount) || 0, parseFloat(taxRate) || 0);
+    onClose();
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Service Item" size="sm"
+      footer={
+        <div className="flex gap-2 justify-end">
+          <button onClick={onClose} className="btn-secondary">Cancel</button>
+          <button onClick={handleAdd} disabled={!name.trim() || !parseFloat(price)}
+            className="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+            Add to Cart
+          </button>
+        </div>
+      }>
+      <div className="space-y-4">
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-violet-50 border border-violet-200 text-sm text-violet-700">
+          <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Service items don't deduct stock — billed as a service charge only.
+        </div>
+        <div>
+          <label className="label">Service Description <span className="text-red-500">*</span></label>
+          <input ref={nameRef} type="text" className="input" value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            placeholder="e.g. Lamination, Binding, Design work" />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Quantity</label>
+            <input type="number" className="input" min={0.001} step={0.001}
+              value={qty} onChange={e => setQty(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Unit Price (LKR) <span className="text-red-500">*</span></label>
+            <input type="number" className="input" min={0} step={0.01}
+              value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Discount (LKR)</label>
+            <input type="number" className="input" min={0} step={0.01}
+              value={discount} onChange={e => setDiscount(e.target.value)} placeholder="0.00" />
+          </div>
+          <div>
+            <label className="label">Tax Rate (%)</label>
+            <input type="number" className="input" min={0} step={0.1}
+              value={taxRate} onChange={e => setTaxRate(e.target.value)} placeholder="0" />
+          </div>
+        </div>
+        {parseFloat(price) > 0 && (
+          <div className="flex justify-between items-center px-3 py-2 bg-surface-50 rounded-lg text-sm font-semibold">
+            <span className="text-surface-600">Line Total</span>
+            <span className="text-violet-700">LKR {lineTotal.toFixed(2)}</span>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Product Search Dropdown ──────────────────────────────────────────────────
 function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
   const t = useT();
@@ -802,7 +892,8 @@ export default function POS() {
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
   const [applyingPromoId, setApplyingPromoId] = useState<number | null>(null);
   const [activePromos, setActivePromos] = useState<Promotion[]>([]);
-  const [isReturnOpen, setIsReturnOpen] = useState(false);
+  const [isReturnOpen, setIsReturnOpen]   = useState(false);
+  const [isServiceOpen, setIsServiceOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'cart' | 'bill'>('cart');
 
   // Check active shift
@@ -837,7 +928,10 @@ export default function POS() {
     setIsProcessing(true);
     try {
       const r = await api.post('/sales', {
-        cart_items: pos.cart,
+        cart_items: pos.cart.map(item => ({
+          ...item,
+          product_id: item.is_service ? null : item.product_id,
+        })),
         bill_discount: pos.billDiscount,
         payment_method: method,
         cash_tendered: cashTendered,
@@ -963,6 +1057,16 @@ export default function POS() {
               <kbd className="ml-1 px-1.5 py-0.5 bg-surface-100 rounded font-mono text-surface-600">F10</kbd><span>Pay</span>
             </div>
             <button
+              onClick={() => setIsServiceOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 text-sm font-medium transition-colors border border-violet-200"
+              title="Add a service charge (no stock)"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              + Service
+            </button>
+            <button
               onClick={() => setIsReturnOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-100 text-surface-600 hover:bg-amber-50 hover:text-amber-700 text-sm font-medium transition-colors border border-surface-200"
               title="Process a return"
@@ -980,21 +1084,35 @@ export default function POS() {
           {pos.cart.length === 0 ? (
             <EmptyCart />
           ) : pos.cart.map((item, index) => {
-            const itemPromos = activePromos.filter((p) =>
+            const isService = item.is_service === true;
+            const itemPromos = isService ? [] : activePromos.filter((p) =>
               (p.applies_to === 'product' && p.product_id === item.product_id) ||
               (p.applies_to === 'category' && p.category_id != null && p.category_id === item.category_id)
             );
             return (
-              <div key={item.product_id} className="bg-primary-50 rounded-lg border border-primary-100 shadow-sm overflow-hidden flex">
+              <div key={item.product_id} className={`rounded-lg shadow-sm overflow-hidden flex border ${
+                isService
+                  ? 'bg-violet-50 border-violet-200'
+                  : 'bg-primary-50 border-primary-100'
+              }`}>
 
                 {/* Single row: # · name · qty · price · discount · total · remove */}
                 <div className="flex-1 min-w-0 flex items-center gap-2 px-2.5 py-2">
-                  <span className="shrink-0 w-5 h-5 rounded-full bg-primary-200 text-primary-700 text-[10px] font-bold flex items-center justify-center select-none">
+                  <span className={`shrink-0 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center select-none ${
+                    isService ? 'bg-violet-200 text-violet-700' : 'bg-primary-200 text-primary-700'
+                  }`}>
                     {index + 1}
                   </span>
 
-                  {/* Name — natural width, max 38%, truncates if long */}
-                  <p className="min-w-0 max-w-[38%] text-sm font-semibold text-surface-900 truncate shrink-0">{item.product_name}</p>
+                  {/* Name + optional SERVICE badge */}
+                  <div className="flex items-center gap-1.5 min-w-0 max-w-[40%] shrink-0">
+                    <p className="text-sm font-semibold text-surface-900 truncate">{item.product_name}</p>
+                    {isService && (
+                      <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-600 text-white uppercase tracking-wide">
+                        SVC
+                      </span>
+                    )}
+                  </div>
 
                   {/* Qty controls */}
                   <div className="flex items-center border border-primary-200 rounded overflow-hidden h-7 bg-white shrink-0 focus-within:border-primary-400 transition-colors">
@@ -1249,6 +1367,14 @@ export default function POS() {
       />
       <ReceiptModal sale={completedSale} onClose={() => setCompletedSale(null)} />
       <SaleReturnModal isOpen={isReturnOpen} onClose={() => setIsReturnOpen(false)} />
+      <ServiceItemModal
+        isOpen={isServiceOpen}
+        onClose={() => setIsServiceOpen(false)}
+        onAdd={(name, qty, price, discount, taxRate) => {
+          pos.addServiceItem(name, qty, price, discount, taxRate);
+          setIsServiceOpen(false);
+        }}
+      />
     </div>
   );
 }

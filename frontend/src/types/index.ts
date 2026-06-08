@@ -44,7 +44,8 @@ export interface Brand {
 }
 
 export interface CartItem {
-  product_id: number;
+  product_id: number;        // negative numbers are used locally for service items
+  is_service?: boolean;
   product_name: string;
   barcode?: string;
   sku: string;

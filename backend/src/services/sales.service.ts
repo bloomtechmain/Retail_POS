@@ -30,17 +30,21 @@ export const createSale = async (data: CreateSalePayload, cashierId: number): Pr
     const processedItems = [];
 
     for (const item of data.cart_items) {
-      // Get current product avg_cost
-      const productResult = await client.query(
-        'SELECT id, avg_cost, current_stock, allow_negative_stock FROM products WHERE id = $1',
-        [item.product_id]
-      );
-      if (productResult.rows.length === 0) {
-        throw createError(`Product ${item.product_id} not found`, 404);
-      }
-      const product = productResult.rows[0];
+      const isService = item.is_service === true || item.product_id === null;
+      let costPrice = 0;
 
-      const costPrice = parseFloat(product.avg_cost) || item.cost_price || 0;
+      if (!isService) {
+        // Get current product avg_cost and validate existence
+        const productResult = await client.query(
+          'SELECT id, avg_cost, current_stock, allow_negative_stock FROM products WHERE id = $1',
+          [item.product_id]
+        );
+        if (productResult.rows.length === 0) {
+          throw createError(`Product ${item.product_id} not found`, 404);
+        }
+        costPrice = parseFloat(productResult.rows[0].avg_cost) || item.cost_price || 0;
+      }
+
       const lineSubtotal = round2(item.unit_price * item.quantity);
       const lineDiscount = round2(item.item_discount * item.quantity);
       const taxableAmount = lineSubtotal - lineDiscount;
@@ -54,6 +58,7 @@ export const createSale = async (data: CreateSalePayload, cashierId: number): Pr
 
       processedItems.push({
         ...item,
+        is_service: isService,
         cost_price: costPrice,
         line_subtotal: lineTotal,
       });
@@ -101,12 +106,16 @@ export const createSale = async (data: CreateSalePayload, cashierId: number): Pr
            tax_rate, tax_amount, subtotal, promotion_id
          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
         [
-          sale.id, item.product_id, item.product_name, item.barcode || null, item.quantity,
+          sale.id, item.is_service ? null : item.product_id,
+          item.product_name, item.barcode || null, item.quantity,
           item.unit_price, item.original_price, item.cost_price, item.item_discount || 0,
           item.tax_rate || 0, round2(((item.unit_price - item.item_discount) * item.quantity * item.tax_rate) / 100),
           item.line_subtotal, item.promotion_id || null,
         ]
       );
+
+      // Service items have no inventory — skip stock deduction
+      if (item.is_service) continue;
 
       // Get balance before
       const stockResult = await client.query(
