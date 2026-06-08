@@ -648,90 +648,159 @@ function SaleReturnModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => 
 }
 
 // ─── Service Item Modal ───────────────────────────────────────────────────────
-function ServiceItemModal({ isOpen, onClose, onAdd }: {
+interface ServiceLine {
+  id: number;
+  name: string;
+  qty: string;
+  price: string;
+  discount: string;
+  taxRate: string;
+}
+
+function blankLine(): ServiceLine {
+  return { id: Date.now() + Math.random(), name: '', qty: '1', price: '', discount: '', taxRate: '0' };
+}
+
+function ServiceItemModal({ isOpen, onClose, onAddAll }: {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (name: string, qty: number, price: number, discount: number, taxRate: number) => void;
+  onAddAll: (lines: Array<{ name: string; qty: number; price: number; discount: number; taxRate: number }>) => void;
 }) {
-  const [name, setName]         = useState('');
-  const [qty, setQty]           = useState('1');
-  const [price, setPrice]       = useState('');
-  const [discount, setDiscount] = useState('');
-  const [taxRate, setTaxRate]   = useState('0');
-  const nameRef = useRef<HTMLInputElement>(null);
+  const [lines, setLines] = useState<ServiceLine[]>([blankLine()]);
+  const firstNameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setName(''); setQty('1'); setPrice(''); setDiscount(''); setTaxRate('0');
-      setTimeout(() => nameRef.current?.focus(), 60);
+      setLines([blankLine()]);
+      setTimeout(() => firstNameRef.current?.focus(), 60);
     }
   }, [isOpen]);
 
-  const lineTotal = Math.max(0,
-    (parseFloat(qty) || 0) * (parseFloat(price) || 0) - (parseFloat(discount) || 0)
-  );
+  const updateLine = (id: number, field: keyof ServiceLine, value: string) =>
+    setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
-  const handleAdd = () => {
-    if (!name.trim() || !parseFloat(price)) return;
-    onAdd(name.trim(), parseFloat(qty) || 1, parseFloat(price) || 0, parseFloat(discount) || 0, parseFloat(taxRate) || 0);
+  const addLine = () => setLines(prev => [...prev, blankLine()]);
+
+  const removeLine = (id: number) =>
+    setLines(prev => prev.length > 1 ? prev.filter(l => l.id !== id) : prev);
+
+  const lineTotal = (l: ServiceLine) =>
+    Math.max(0, (parseFloat(l.qty) || 0) * (parseFloat(l.price) || 0) - (parseFloat(l.discount) || 0));
+
+  const grandTotal = lines.reduce((s, l) => s + lineTotal(l), 0);
+
+  const validLines = lines.filter(l => l.name.trim() && parseFloat(l.price) > 0);
+
+  const handleAddAll = () => {
+    if (!validLines.length) return;
+    onAddAll(validLines.map(l => ({
+      name: l.name.trim(),
+      qty: parseFloat(l.qty) || 1,
+      price: parseFloat(l.price) || 0,
+      discount: parseFloat(l.discount) || 0,
+      taxRate: parseFloat(l.taxRate) || 0,
+    })));
     onClose();
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Service Item" size="sm"
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Service Items" size="lg"
       footer={
-        <div className="flex gap-2 justify-end">
-          <button onClick={onClose} className="btn-secondary">Cancel</button>
-          <button onClick={handleAdd} disabled={!name.trim() || !parseFloat(price)}
-            className="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
-            Add to Cart
-          </button>
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm text-surface-600">
+            <span className="font-medium">{validLines.length}</span> service{validLines.length !== 1 ? 's' : ''} &nbsp;·&nbsp;
+            <span className="font-bold text-violet-700">LKR {grandTotal.toFixed(2)}</span>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="btn-secondary">Cancel</button>
+            <button onClick={handleAddAll} disabled={!validLines.length}
+              className="bg-violet-600 hover:bg-violet-700 text-white font-semibold px-4 py-2 rounded-lg disabled:opacity-40 transition-colors">
+              Add {validLines.length > 1 ? `${validLines.length} Services` : 'Service'} to Cart
+            </button>
+          </div>
         </div>
       }>
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-violet-50 border border-violet-200 text-sm text-violet-700">
           <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
-          Service items don't deduct stock — billed as a service charge only.
+          Service items don't deduct stock — billed as service charges only. Add as many as needed.
         </div>
-        <div>
-          <label className="label">Service Description <span className="text-red-500">*</span></label>
-          <input ref={nameRef} type="text" className="input" value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="e.g. Lamination, Binding, Design work" />
+
+        {/* Column headers */}
+        <div className="grid grid-cols-[1fr_60px_90px_80px_60px_28px] gap-2 px-1">
+          {['Description', 'Qty', 'Unit Price', 'Discount', 'Tax %', ''].map(h => (
+            <span key={h} className="text-xs font-semibold text-surface-500 uppercase tracking-wide">{h}</span>
+          ))}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Quantity</label>
-            <input type="number" className="input" min={0.001} step={0.001}
-              value={qty} onChange={e => setQty(e.target.value)} />
-          </div>
-          <div>
-            <label className="label">Unit Price (LKR) <span className="text-red-500">*</span></label>
-            <input type="number" className="input" min={0} step={0.01}
-              value={price} onChange={e => setPrice(e.target.value)} placeholder="0.00" />
-          </div>
+
+        {/* Service lines */}
+        <div className="space-y-2">
+          {lines.map((line, idx) => (
+            <div key={line.id} className="grid grid-cols-[1fr_60px_90px_80px_60px_28px] gap-2 items-center">
+              <input
+                ref={idx === 0 ? firstNameRef : undefined}
+                type="text"
+                value={line.name}
+                onChange={e => updateLine(line.id, 'name', e.target.value)}
+                placeholder="e.g. Lamination, Binding…"
+                className="input py-1.5 text-sm"
+              />
+              <input
+                type="number" min={0.001} step={0.001}
+                value={line.qty}
+                onChange={e => updateLine(line.id, 'qty', e.target.value)}
+                className="input py-1.5 text-sm text-center"
+              />
+              <input
+                type="number" min={0} step={0.01}
+                value={line.price}
+                onChange={e => updateLine(line.id, 'price', e.target.value)}
+                placeholder="0.00"
+                className="input py-1.5 text-sm text-right"
+              />
+              <input
+                type="number" min={0} step={0.01}
+                value={line.discount}
+                onChange={e => updateLine(line.id, 'discount', e.target.value)}
+                placeholder="0.00"
+                className="input py-1.5 text-sm text-right text-red-600"
+              />
+              <input
+                type="number" min={0} step={0.1}
+                value={line.taxRate}
+                onChange={e => updateLine(line.id, 'taxRate', e.target.value)}
+                placeholder="0"
+                className="input py-1.5 text-sm text-center"
+              />
+              <button
+                onClick={() => removeLine(line.id)}
+                className="w-7 h-7 flex items-center justify-center text-surface-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                title="Remove line">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          ))}
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="label">Discount (LKR)</label>
-            <input type="number" className="input" min={0} step={0.01}
-              value={discount} onChange={e => setDiscount(e.target.value)} placeholder="0.00" />
-          </div>
-          <div>
-            <label className="label">Tax Rate (%)</label>
-            <input type="number" className="input" min={0} step={0.1}
-              value={taxRate} onChange={e => setTaxRate(e.target.value)} placeholder="0" />
-          </div>
+
+        {/* Per-line totals + add line */}
+        <div className="flex items-center justify-between pt-1 border-t border-surface-200">
+          <button onClick={addLine}
+            className="flex items-center gap-1.5 text-sm text-violet-600 hover:text-violet-800 font-medium transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add another service line
+          </button>
+          {grandTotal > 0 && (
+            <div className="text-sm font-semibold text-surface-700">
+              Total: <span className="text-violet-700 font-bold">LKR {grandTotal.toFixed(2)}</span>
+            </div>
+          )}
         </div>
-        {parseFloat(price) > 0 && (
-          <div className="flex justify-between items-center px-3 py-2 bg-surface-50 rounded-lg text-sm font-semibold">
-            <span className="text-surface-600">Line Total</span>
-            <span className="text-violet-700">LKR {lineTotal.toFixed(2)}</span>
-          </div>
-        )}
       </div>
     </Modal>
   );
@@ -1370,8 +1439,8 @@ export default function POS() {
       <ServiceItemModal
         isOpen={isServiceOpen}
         onClose={() => setIsServiceOpen(false)}
-        onAdd={(name, qty, price, discount, taxRate) => {
-          pos.addServiceItem(name, qty, price, discount, taxRate);
+        onAddAll={(lines) => {
+          lines.forEach(l => pos.addServiceItem(l.name, l.qty, l.price, l.discount, l.taxRate));
           setIsServiceOpen(false);
         }}
       />
