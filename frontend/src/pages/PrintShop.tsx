@@ -219,6 +219,12 @@ const fmtDate = (s: string) => new Date(s).toLocaleString();
 // ─────────────────────────────────────────────
 // Custom Invoice Tab
 // ─────────────────────────────────────────────
+interface CustomerSuggestion { customer_name: string; customer_phone: string; customer_address: string; }
+interface CreditHistory {
+  summary: { invoice_count: number; total_amount: string; total_paid: string; total_balance_due: string };
+  invoices: Array<{ id: number; invoice_number: string; invoice_date: string; grand_total: string; amount_paid: string; balance_due: string; status: string }>;
+}
+
 function CustomInvoiceTab() {
   const toast = useToastStore();
 
@@ -232,9 +238,68 @@ function CustomInvoiceTab() {
   const [taxRate, setTaxRate]             = useState(0);
   const [paymentType, setPaymentType]     = useState<'cash' | 'credit'>('cash');
   const [saving, setSaving]               = useState(false);
+
+  // Autocomplete state
+  const [suggestions, setSuggestions]       = useState<CustomerSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestDebounce = useRef<ReturnType<typeof setTimeout>>();
+  const nameWrapRef = useRef<HTMLDivElement>(null);
+
+  // Credit history state
+  const [creditHistory, setCreditHistory]   = useState<CreditHistory | null>(null);
+  const [loadingCredit, setLoadingCredit]   = useState(false);
+  const creditDebounce = useRef<ReturnType<typeof setTimeout>>();
+
   const [lines, setLines] = useState<CILine[]>([
     { id: 1, description: '', qty: 1, unit_price: 0, discount: 0 },
   ]);
+
+  // ── Autocomplete: fetch suggestions as user types ──────────────────────
+  const fetchSuggestions = (q: string) => {
+    clearTimeout(suggestDebounce.current);
+    if (!q.trim()) { setSuggestions([]); setShowSuggestions(false); return; }
+    suggestDebounce.current = setTimeout(async () => {
+      try {
+        const res = await api.get('/printshop-invoices/customers/suggest', { params: { q } });
+        setSuggestions(res.data.data || []);
+        setShowSuggestions((res.data.data || []).length > 0);
+      } catch { /* ignore */ }
+    }, 220);
+  };
+
+  // ── Credit history: fetch when customer name is confirmed ──────────────
+  const fetchCreditHistory = (name: string) => {
+    clearTimeout(creditDebounce.current);
+    setCreditHistory(null);
+    if (!name.trim()) return;
+    creditDebounce.current = setTimeout(async () => {
+      setLoadingCredit(true);
+      try {
+        const res = await api.get(`/printshop-invoices/credits/full/${encodeURIComponent(name.trim())}`);
+        const d = res.data.data;
+        if (d && parseInt(d.summary?.invoice_count) > 0) setCreditHistory(d);
+        else setCreditHistory(null);
+      } catch { /* ignore */ }
+      finally { setLoadingCredit(false); }
+    }, 400);
+  };
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => {
+      if (!nameWrapRef.current?.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const pickSuggestion = (s: CustomerSuggestion) => {
+    setCustomerName(s.customer_name);
+    setCustomerPhone(s.customer_phone || '');
+    setCustomerAddr(s.customer_address || '');
+    setShowSuggestions(false);
+    fetchCreditHistory(s.customer_name);
+  };
 
   const addLine = () =>
     setLines(prev => [...prev, { id: Date.now(), description: '', qty: 1, unit_price: 0, discount: 0 }]);
@@ -283,11 +348,10 @@ function CustomInvoiceTab() {
       });
       downloadCustomInvoicePDF(ciData);
       toast.success(paymentType === 'credit' ? 'Credit invoice saved & PDF downloaded' : 'Invoice saved & PDF downloaded');
-      // Reset for next invoice
       setInvoiceNumber(genInvoiceNumber());
       setCustomerName(''); setCustomerAddr(''); setCustomerPhone('');
       setNotes(''); setBillDiscount(0); setTaxRate(0);
-      setPaymentType('cash');
+      setPaymentType('cash'); setCreditHistory(null);
       setLines([{ id: Date.now(), description: '', qty: 1, unit_price: 0, discount: 0 }]);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to save invoice');
@@ -320,12 +384,12 @@ function CustomInvoiceTab() {
         </button>
       </div>
 
-      {paymentType === 'credit' && (
+      {paymentType === 'credit' && !creditHistory && (
         <div className="flex items-start gap-3 px-4 py-3 rounded-lg border border-orange-200 bg-orange-50 text-orange-800 text-sm">
           <svg className="w-5 h-5 mt-0.5 shrink-0 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <span>Credit sale — the full balance will be recorded as outstanding for this customer. You can track and settle it in the <strong>Credit Ledger</strong> tab.</span>
+          <span>Credit sale — the full balance will be recorded as outstanding. Track and settle it in the <strong>Credit Ledger</strong> tab.</span>
         </div>
       )}
 
@@ -366,11 +430,49 @@ function CustomInvoiceTab() {
         {/* Bill To */}
         <div className="card p-5 space-y-4">
           <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Bill To</p>
+
+          {/* Customer name with autocomplete */}
           <div>
             <label className="label">Customer Name *</label>
-            <input className="input" value={customerName}
-              onChange={e => setCustomerName(e.target.value)} placeholder="e.g. ABC Company" />
+            <div className="relative" ref={nameWrapRef}>
+              <input
+                className="input"
+                value={customerName}
+                onChange={e => {
+                  setCustomerName(e.target.value);
+                  fetchSuggestions(e.target.value);
+                  fetchCreditHistory(e.target.value);
+                }}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                placeholder="e.g. ABC Company"
+                autoComplete="off"
+              />
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-surface-200 shadow-xl z-50 overflow-hidden">
+                  {suggestions.map(s => (
+                    <button
+                      key={s.customer_name}
+                      onMouseDown={() => pickSuggestion(s)}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-primary-50 transition-colors border-b border-surface-100 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium text-surface-900">{s.customer_name}</p>
+                        {(s.customer_phone || s.customer_address) && (
+                          <p className="text-xs text-surface-400">
+                            {[s.customer_phone, s.customer_address].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
+                      </div>
+                      <svg className="w-4 h-4 text-surface-300 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+
           <div>
             <label className="label">Address</label>
             <input className="input" value={customerAddr}
@@ -383,6 +485,90 @@ function CustomInvoiceTab() {
           </div>
         </div>
       </div>
+
+      {/* ── Credit history panel ─────────────────────────────────────────── */}
+      {loadingCredit && (
+        <div className="text-sm text-surface-400 px-1">Checking credit history…</div>
+      )}
+      {creditHistory && (
+        <div className="card overflow-hidden border-orange-200">
+          {/* Summary bar */}
+          <div className="px-5 py-4 bg-orange-50 border-b border-orange-200 flex flex-wrap items-center gap-6">
+            <div>
+              <p className="text-xs font-semibold text-orange-600 uppercase tracking-wider">Credit History — {customerName}</p>
+              <p className="text-xs text-surface-500 mt-0.5">{creditHistory.summary.invoice_count} credit invoice{creditHistory.summary.invoice_count !== 1 ? 's' : ''}</p>
+            </div>
+            <div className="flex gap-6 ml-auto text-sm">
+              <div className="text-right">
+                <p className="text-xs text-surface-500">Total Invoiced</p>
+                <p className="font-semibold text-surface-800">LKR {fmt(parseFloat(creditHistory.summary.total_amount))}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-surface-500">Paid</p>
+                <p className="font-semibold text-green-700">LKR {fmt(parseFloat(creditHistory.summary.total_paid))}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-orange-600 font-semibold">Outstanding</p>
+                <p className="text-lg font-bold text-orange-600">LKR {fmt(parseFloat(creditHistory.summary.total_balance_due))}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Invoice rows */}
+          <div className="table-wrapper">
+            <table className="table text-sm">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th className="text-right">Total</th>
+                  <th className="text-right">Paid</th>
+                  <th className="text-right">Balance Due</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditHistory.invoices.map(inv => (
+                  <tr key={inv.id}>
+                    <td className="font-mono text-xs text-primary-600">{inv.invoice_number}</td>
+                    <td className="text-xs text-surface-500">
+                      {new Date(inv.invoice_date).toLocaleDateString('en-GB')}
+                    </td>
+                    <td className="text-right font-medium">LKR {fmt(parseFloat(inv.grand_total))}</td>
+                    <td className="text-right text-green-700">LKR {fmt(parseFloat(inv.amount_paid))}</td>
+                    <td className="text-right">
+                      <span className={`font-semibold ${parseFloat(inv.balance_due) > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                        LKR {fmt(parseFloat(inv.balance_due))}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                        inv.status === 'paid'    ? 'bg-green-100 text-green-700' :
+                        inv.status === 'partial' ? 'bg-blue-100 text-blue-700' :
+                                                   'bg-orange-100 text-orange-700'
+                      }`}>{inv.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              {parseFloat(creditHistory.summary.total_balance_due) > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-orange-300 bg-orange-50">
+                    <td colSpan={4} className="px-4 py-2.5 text-right font-bold text-orange-700 text-sm">
+                      Total Outstanding (before this invoice)
+                    </td>
+                    <td className="px-4 py-2.5 text-right font-black text-orange-700 text-base">
+                      LKR {fmt(parseFloat(creditHistory.summary.total_balance_due))}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
+      )}
+      {/* ───────────────────────────────────────────────────────────────── */}
 
       {/* Line items */}
       <div className="card overflow-hidden">

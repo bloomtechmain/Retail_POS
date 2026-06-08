@@ -43,6 +43,22 @@ export const customerInvoices = async (req: AuthRequest, res: Response, next: Ne
   } catch (err) { next(err); }
 };
 
+export const customerSuggestions = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const q = (req.query.q as string || '').trim();
+    if (!q) { res.json({ success: true, data: [] }); return; }
+    const data = await svc.getCustomerSuggestions(q);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
+export const customerFullCredit = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const data = await svc.getCustomerFullCredit(decodeURIComponent(req.params.customerName));
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+
 export const payment = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const invoice = await svc.recordPayment(parseInt(req.params.id), parseFloat(req.body.amount));

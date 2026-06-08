@@ -158,6 +158,45 @@ export const getCustomerInvoices = async (customerName: string) => {
   return result.rows;
 };
 
+export const getCustomerSuggestions = async (q: string) => {
+  const result = await query(
+    `SELECT customer_name, customer_phone, customer_address
+     FROM (
+       SELECT DISTINCT ON (LOWER(customer_name))
+         customer_name, customer_phone, customer_address, created_at
+       FROM printshop_invoices
+       WHERE customer_name ILIKE $1
+       ORDER BY LOWER(customer_name), created_at DESC
+     ) sub
+     LIMIT 8`,
+    [`%${q}%`]
+  );
+  return result.rows;
+};
+
+export const getCustomerFullCredit = async (customerName: string) => {
+  const summary = await query(
+    `SELECT
+       COUNT(*)::int           AS invoice_count,
+       SUM(grand_total)        AS total_amount,
+       SUM(amount_paid)        AS total_paid,
+       SUM(balance_due)        AS total_balance_due
+     FROM printshop_invoices
+     WHERE payment_type = 'credit' AND LOWER(customer_name) = LOWER($1)`,
+    [customerName]
+  );
+
+  const invoices = await query(
+    `SELECT id, invoice_number, invoice_date, grand_total, amount_paid, balance_due, status, notes, created_at
+     FROM printshop_invoices
+     WHERE payment_type = 'credit' AND LOWER(customer_name) = LOWER($1)
+     ORDER BY created_at DESC`,
+    [customerName]
+  );
+
+  return { summary: summary.rows[0], invoices: invoices.rows };
+};
+
 export const recordPayment = async (id: number, amount: number) => {
   const invoiceResult = await query(
     `SELECT * FROM printshop_invoices WHERE id = $1`,
