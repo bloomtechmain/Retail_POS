@@ -256,11 +256,83 @@ function downloadSalePDF(sale: Sale) {
   buildSalePDF(sale).save(`Invoice-${sale.sale_number}.pdf`);
 }
 
-function printSalePDF(sale: Sale) {
-  const doc = buildSalePDF(sale);
-  doc.autoPrint();
-  const url = doc.output('bloburl');
-  window.open(url as unknown as string, '_blank');
+function printReceipt(sale: Sale) {
+  const f = (v: number | string) => `LKR ${Number(v).toFixed(2)}`;
+
+  const paymentLabel =
+    sale.payment_method === 'cash'  ? 'Cash' :
+    sale.payment_method === 'card'  ? 'Card' :
+    sale.payment_method === 'mixed' ? 'Cash + Card' : 'Credit (Pay Later)';
+
+  const itemRows = (sale.items || []).map(item => `
+    <div class="row">
+      <span class="name">${item.product_name}</span>
+      <span class="side">${Number(item.quantity)}×${f(item.unit_price)}</span>
+      <span class="amount">${f(item.subtotal)}</span>
+    </div>`).join('');
+
+  let totals = `<div class="trow"><span>Subtotal</span><span>${f(sale.subtotal)}</span></div>`;
+  if (Number(sale.discount_amount) > 0)
+    totals += `<div class="trow red"><span>Discount</span><span>-${f(sale.discount_amount)}</span></div>`;
+  if (Number(sale.tax_amount) > 0)
+    totals += `<div class="trow"><span>Tax</span><span>${f(sale.tax_amount)}</span></div>`;
+  totals += `<div class="trow grand"><span>TOTAL</span><span>${f(sale.total_amount)}</span></div>`;
+  if (Number(sale.cash_tendered) > 0)
+    totals += `<div class="trow"><span>Cash Tendered</span><span>${f(sale.cash_tendered)}</span></div>`;
+  if (Number(sale.change_amount) > 0)
+    totals += `<div class="trow green"><span>Change</span><span>${f(sale.change_amount)}</span></div>`;
+  if (sale.payment_method === 'credit')
+    totals += `<div class="trow orange"><span>Payment</span><span>Credit (Pay Later)</span></div>`;
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Receipt</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Courier New',monospace;font-size:12px;width:80mm;padding:5mm;color:#000}
+  .center{text-align:center}
+  .shop-name{font-size:14px;font-weight:bold;margin-bottom:2px}
+  .sub{font-size:10px;color:#444;margin-top:1px}
+  .dash{border-top:1px dashed #000;margin:6px 0}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:2px 0;font-size:11px}
+  .row .name{flex:1}
+  .row .side{white-space:nowrap;color:#555}
+  .row .amount{white-space:nowrap;text-align:right;min-width:55px}
+  .trow{display:flex;justify-content:space-between;margin:2px 0;font-size:11px}
+  .trow.grand{font-weight:bold;font-size:13px;border-top:1px solid #000;border-bottom:1px solid #000;padding:3px 0;margin:4px 0}
+  .trow.green{color:#1a7a40}
+  .trow.red{color:#c00}
+  .trow.orange{color:#b35900}
+  .credit{display:inline-block;border:1px solid #f57c00;padding:2px 6px;font-size:10px;font-weight:bold;color:#b35900;margin:3px 0}
+  .thank{font-size:10px;color:#555;margin-top:4px}
+  @media print{body{margin:0}}
+</style></head><body>
+<div class="center">
+  <div class="shop-name">${SHOP_NAME}</div>
+  <div class="sub">${SHOP_ADDRESS}</div>
+  <div class="sub">${SHOP_PHONE}</div>
+</div>
+<div class="dash"></div>
+<div class="center">
+  <div>#${sale.sale_number}</div>
+  <div class="sub">${new Date(sale.created_at).toLocaleString()}</div>
+  <div class="sub">Payment: ${paymentLabel}</div>
+  ${sale.payment_method === 'credit' ? '<div class="credit">&#9888; CREDIT — PAY LATER</div>' : ''}
+  ${sale.customer_name ? `<div class="sub">Customer: ${sale.customer_name}</div>` : ''}
+</div>
+<div class="dash"></div>
+${itemRows}
+<div class="dash"></div>
+${totals}
+<div class="dash"></div>
+<div class="center thank">Thank you for your purchase!</div>
+</body></html>`;
+
+  const w = window.open('', '_blank', 'width=420,height=650');
+  if (!w) return;
+  w.document.write(html);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); w.close(); }, 250);
 }
 
 const fmt = (n: number) => `LKR ${Number(n).toFixed(2)}`;
@@ -462,7 +534,7 @@ function ReceiptModal({ sale, onClose }: { sale: Sale | null; onClose: () => voi
 
       <div className="flex gap-2 mt-4">
         <button
-          onClick={() => printSalePDF(sale)}
+          onClick={() => printReceipt(sale)}
           className="btn-secondary flex-1 flex items-center justify-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
