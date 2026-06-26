@@ -291,22 +291,23 @@ function printReceipt(sale: Sale) {
 <style>
   @page{margin:0mm}
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Courier New',monospace;font-size:12px;font-weight:700;width:${paperWidth - 6}mm;margin:0;padding:1mm 2mm 2mm 1mm;color:#000;-webkit-text-stroke:0.3px #000}
+  body{font-family:'Courier New',monospace;font-size:14px;font-weight:700;width:${paperWidth - 6}mm;margin:0;padding:1mm 2mm 2mm 1mm;color:#000;-webkit-text-stroke:0.3px #000}
   .center{text-align:center}
-  .shop-name{font-size:15px;font-weight:900;margin-bottom:2px;-webkit-text-stroke:0.5px #000}
-  .sub{font-size:10px;color:#333;margin-top:1px;font-weight:600}
+  .shop-name{font-size:17px;font-weight:900;margin-bottom:2px;-webkit-text-stroke:0.5px #000}
+  .sub{font-size:11px;color:#333;margin-top:1px;font-weight:600}
   .dash{border-top:1.5px dashed #000;margin:6px 0}
-  .row{display:flex;justify-content:space-between;gap:4px;margin:2px 0;font-size:11px;font-weight:700}
+  .row{display:flex;justify-content:space-between;gap:4px;margin:2px 0;font-size:13px;font-weight:700}
   .row .name{flex:1}
   .row .side{white-space:nowrap;color:#333}
-  .row .amount{white-space:nowrap;text-align:right;min-width:55px}
-  .trow{display:flex;justify-content:space-between;margin:2px 0;font-size:11px;font-weight:700}
-  .trow.grand{font-weight:900;font-size:14px;border-top:1.5px solid #000;border-bottom:1.5px solid #000;padding:3px 0;margin:4px 0;-webkit-text-stroke:0.4px #000}
+  .row .amount{white-space:nowrap;text-align:right;min-width:60px}
+  .trow{display:flex;justify-content:space-between;margin:2px 0;font-size:13px;font-weight:700}
+  .trow.grand{font-weight:900;font-size:16px;border-top:1.5px solid #000;border-bottom:1.5px solid #000;padding:3px 0;margin:4px 0;-webkit-text-stroke:0.4px #000}
   .trow.green{color:#1a7a40}
   .trow.red{color:#c00}
   .trow.orange{color:#b35900}
-  .credit{display:inline-block;border:1px solid #f57c00;padding:2px 6px;font-size:10px;font-weight:800;color:#b35900;margin:3px 0}
-  .thank{font-size:10px;color:#333;margin-top:4px;font-weight:700}
+  .credit{display:inline-block;border:1px solid #f57c00;padding:2px 6px;font-size:11px;font-weight:800;color:#b35900;margin:3px 0}
+  .thank{font-size:12px;color:#333;margin-top:4px;font-weight:700}
+  .powered{font-size:10px;color:#555;margin-top:3px;font-weight:600}
   @media print{body{margin:0}}
 </style></head><body>
 <div class="center">
@@ -328,6 +329,7 @@ ${itemRows}
 ${totals}
 <div class="dash"></div>
 <div class="center thank">Thank you for your purchase!</div>
+<div class="center powered">Powered by bloomtech.lk | 0770774436</div>
 </body></html>`;
 
   const w = window.open('', '_blank');
