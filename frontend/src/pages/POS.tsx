@@ -289,9 +289,9 @@ function printReceipt(sale: Sale) {
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Receipt</title>
 <style>
-  @page{size:${paperWidth}mm auto;margin:0}
+  @page{margin:0mm}
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Courier New',monospace;font-size:12px;width:${paperWidth}mm;padding:4mm;color:#000}
+  body{font-family:'Courier New',monospace;font-size:12px;width:${paperWidth}mm;margin:0;padding:1mm 2mm 2mm 1mm;color:#000}
   .center{text-align:center}
   .shop-name{font-size:14px;font-weight:bold;margin-bottom:2px}
   .sub{font-size:10px;color:#444;margin-top:1px}
@@ -330,7 +330,7 @@ ${totals}
 <div class="center thank">Thank you for your purchase!</div>
 </body></html>`;
 
-  const w = window.open('', '_blank', 'width=420,height=650');
+  const w = window.open('', '_blank');
   if (!w) return;
   w.document.write(html);
   w.document.close();
