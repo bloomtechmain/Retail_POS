@@ -14,7 +14,7 @@ const SHOP_NAME = 'Kalanai Graphics & Print Solutions';
 const SHOP_ADDRESS = '612/2/A, Kandy Road, Eldeniya, Kadawatha';
 const SHOP_PHONE = '0112 927 635 | 0706 812 220';
 
-function downloadSalePDF(sale: Sale) {
+function buildSalePDF(sale: Sale) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
   // ── Dimensions & margins
@@ -249,7 +249,18 @@ function downloadSalePDF(sale: Sale) {
   doc.text(SHOP_ADDRESS, W / 2, FY + 11, { align: 'center' });
   doc.text(SHOP_PHONE,   W / 2, FY + 16, { align: 'center' });
 
-  doc.save(`Invoice-${sale.sale_number}.pdf`);
+  return doc;
+}
+
+function downloadSalePDF(sale: Sale) {
+  buildSalePDF(sale).save(`Invoice-${sale.sale_number}.pdf`);
+}
+
+function printSalePDF(sale: Sale) {
+  const doc = buildSalePDF(sale);
+  doc.autoPrint();
+  const url = doc.output('bloburl');
+  window.open(url as unknown as string, '_blank');
 }
 
 const fmt = (n: number) => `LKR ${Number(n).toFixed(2)}`;
@@ -451,13 +462,22 @@ function ReceiptModal({ sale, onClose }: { sale: Sale | null; onClose: () => voi
 
       <div className="flex gap-2 mt-4">
         <button
+          onClick={() => printSalePDF(sale)}
+          className="btn-secondary flex-1 flex items-center justify-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+          </svg>
+          Print
+        </button>
+        <button
           onClick={() => downloadSalePDF(sale)}
           className="btn-secondary flex-1 flex items-center justify-center gap-2"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
           </svg>
-          Download PDF
+          Download
         </button>
         <button onClick={onClose} className="btn-primary flex-1">{t.pos_new_sale}</button>
       </div>
@@ -817,6 +837,8 @@ function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const debounce = useRef<ReturnType<typeof setTimeout>>();
+  const onAddRef = useRef(onAdd);
+  useEffect(() => { onAddRef.current = onAdd; }, [onAdd]);
 
   // Focus on mount and F2
   useEffect(() => {
@@ -839,15 +861,18 @@ function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
 
       // Auto-add exact barcode match (scanner)
       if (items.length === 1 && (items[0].barcode === q || items[0].sku === q)) {
-        onAdd(items[0]);
+        onAddRef.current(items[0]);
         setQuery('');
         setResults([]);
         setOpen(false);
       } else {
         setOpen(items.length > 0);
       }
+    } catch {
+      setResults([]);
+      setOpen(false);
     } finally { setLoading(false); }
-  }, [onAdd]);
+  }, []);
 
   useEffect(() => {
     clearTimeout(debounce.current);
@@ -857,7 +882,7 @@ function ProductSearch({ onAdd }: { onAdd: (p: Product) => void }) {
   }, [query, search]);
 
   const pick = (p: Product) => {
-    onAdd(p);
+    onAddRef.current(p);
     setQuery('');
     setResults([]);
     setOpen(false);
