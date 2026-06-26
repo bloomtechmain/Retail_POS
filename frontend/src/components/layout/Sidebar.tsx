@@ -167,8 +167,35 @@ export function Sidebar({ mobileOpen, desktopOpen, onMobileClose, onDesktopToggl
         ))}
       </nav>
 
+      {/* Settings */}
+      <div className="px-3 pb-1" style={{ borderTop: '1px solid rgba(255,255,255,0.07)', paddingTop: '8px' }}>
+        <NavLink
+          to="/settings"
+          onClick={onMobileClose}
+          className={({ isActive }) =>
+            `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              isActive ? 'text-white' : 'text-slate-400 hover:text-white'
+            }`
+          }
+          style={({ isActive }) => isActive ? {
+            background: 'linear-gradient(90deg, rgba(2,132,199,0.85) 0%, rgba(14,165,233,0.65) 100%)',
+            boxShadow: '0 2px 8px rgba(2,132,199,0.35), inset 0 1px 0 rgba(255,255,255,0.1)',
+          } : { background: 'transparent' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)'; }}
+          onMouseLeave={(e) => { const el = e.currentTarget as HTMLElement; if (!el.style.boxShadow) el.style.background = 'transparent'; }}
+        >
+          <span className="shrink-0 opacity-90">
+            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </span>
+          Settings
+        </NavLink>
+      </div>
+
       {/* User */}
-      <div className="px-3 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="px-3 py-3">
         <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
           <div
             className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 shadow-sm"

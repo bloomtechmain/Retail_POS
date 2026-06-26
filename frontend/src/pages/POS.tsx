@@ -8,6 +8,7 @@ import { Modal } from '../components/ui/Modal';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import { AxiosError } from 'axios';
 import { useT } from '../i18n/translations';
+import { useSettingsStore } from '../store/settingsStore';
 import jsPDF from 'jspdf';
 
 const SHOP_NAME = 'Kalanai Graphics & Print Solutions';
@@ -257,6 +258,7 @@ function downloadSalePDF(sale: Sale) {
 }
 
 function printReceipt(sale: Sale) {
+  const paperWidth = useSettingsStore.getState().receiptPaperWidth;
   const f = (v: number | string) => `LKR ${Number(v).toFixed(2)}`;
 
   const paymentLabel =
@@ -287,8 +289,9 @@ function printReceipt(sale: Sale) {
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Receipt</title>
 <style>
+  @page{size:${paperWidth}mm auto;margin:0}
   *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Courier New',monospace;font-size:12px;width:80mm;padding:5mm;color:#000}
+  body{font-family:'Courier New',monospace;font-size:12px;width:${paperWidth}mm;padding:4mm;color:#000}
   .center{text-align:center}
   .shop-name{font-size:14px;font-weight:bold;margin-bottom:2px}
   .sub{font-size:10px;color:#444;margin-top:1px}

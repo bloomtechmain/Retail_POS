@@ -13,6 +13,7 @@ import Shifts from './pages/Shifts';
 import Users from './pages/Users';
 import PrintShop from './pages/PrintShop'
 import Expenses from './pages/Expenses';
+import Settings from './pages/Settings';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route path="/pos" element={<POS />} />
           <Route path="/shifts" element={<Shifts />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
 
         {/* Protected — All Roles (Print Shop) */}
