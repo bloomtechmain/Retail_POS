@@ -236,7 +236,7 @@ export default function Inventory() {
           </div>
           <div>
             <label className="label">{t.quantity}</label>
-            <input type="number" className="input" value={adjForm.quantity} onChange={(e) => setAdjForm(f => ({ ...f, quantity: e.target.value }))} min="0" step="0.001" />
+            <input type="number" className="input" value={adjForm.quantity} onChange={(e) => setAdjForm(f => ({ ...f, quantity: e.target.value }))} min="0" step="1" />
           </div>
           <div>
             <label className="label">{t.inventory_adj_reason}</label>

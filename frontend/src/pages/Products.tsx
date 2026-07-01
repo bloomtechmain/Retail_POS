@@ -225,7 +225,7 @@ export default function Products() {
           </div>
           <div>
             <label className="label">{t.products_opening_stock}</label>
-            <input type="number" className="input" value={editProduct.current_stock || ''} onChange={(e) => setEditProduct(p => ({ ...p, current_stock: parseFloat(e.target.value) || 0 }))} min="0" step="0.001" />
+            <input type="number" className="input" value={editProduct.current_stock || ''} onChange={(e) => setEditProduct(p => ({ ...p, current_stock: parseFloat(e.target.value) || 0 }))} min="0" step="1" />
           </div>
           <div>
             <label className="label">{t.products_low_stock_alert}</label>

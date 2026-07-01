@@ -786,7 +786,7 @@ function CustomInvoiceTab() {
                         className="w-full bg-transparent text-surface-900 text-sm focus:outline-none border-b border-transparent focus:border-primary-400 pb-0.5 transition-colors placeholder-surface-300" />
                     </td>
                     <td className="text-center">
-                      <input type="number" min={0.001} step={0.001} value={line.qty || ''}
+                      <input type="number" min={1} step={1} value={line.qty || ''}
                         onChange={e => updateLine(line.id, 'qty', parseFloat(e.target.value) || 0)}
                         className="w-16 text-center input py-1 text-sm" />
                     </td>
@@ -1376,7 +1376,7 @@ function InternalUseTab() {
                         <div className="text-xs text-surface-400">@ LKR {fmt(item.cost_price)} each</div>
                       </td>
                       <td className="text-center">
-                        <input type="number" min={0.001} step={0.001} value={item.quantity}
+                        <input type="number" min={1} step={1} value={item.quantity}
                           onChange={e => updateQty(item.product_id, parseFloat(e.target.value) || 0)}
                           className="w-20 text-center input py-1 text-sm" />
                       </td>

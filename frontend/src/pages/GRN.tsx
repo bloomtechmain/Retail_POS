@@ -262,7 +262,7 @@ export default function GRNPage() {
                       </select>
                     </td>
                     <td>
-                      <input type="number" className="input py-1.5 text-sm font-mono" value={item.quantity} onChange={(e) => updateItem(idx, 'quantity', e.target.value)} placeholder="0" min="0" step="0.001" />
+                      <input type="number" className="input py-1.5 text-sm font-mono" value={item.quantity} onChange={(e) => updateItem(idx, 'quantity', e.target.value)} placeholder="0" min="0" step="1" />
                     </td>
                     <td>
                       <input type="number" className="input py-1.5 text-sm font-mono" value={item.buying_price} onChange={(e) => updateItem(idx, 'buying_price', e.target.value)} placeholder="0.00" min="0" step="0.0001" />
@@ -387,7 +387,7 @@ export default function GRNPage() {
                         placeholder="0"
                         min="0"
                         max={Number(item.quantity)}
-                        step="0.001"
+                        step="1"
                         value={returnItems[item.id!] ?? ''}
                         onChange={(e) => setReturnItems((r) => ({ ...r, [item.id!]: e.target.value }))}
                       />

@@ -885,7 +885,7 @@ function ServiceItemModal({ isOpen, onClose, onAddAll }: {
                 className="input py-1.5 text-sm"
               />
               <input
-                type="number" min={0.001} step={0.001}
+                type="number" min={1} step={1}
                 value={line.qty}
                 onChange={e => updateLine(line.id, 'qty', e.target.value)}
                 className="input py-1.5 text-sm text-center"
