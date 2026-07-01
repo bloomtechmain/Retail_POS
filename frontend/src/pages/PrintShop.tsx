@@ -5,11 +5,34 @@ import { useT } from '../i18n/translations';
 import { useToastStore } from '../store/toastStore';
 import { PageContainer } from '../components/layout/Layout';
 import { Modal } from '../components/ui/Modal';
+import kalaniLogo from '../assets/kalani-logo.png';
 
 // ── Shop constants (shared with POS receipt)
-const SHOP_NAME    = 'Kalanai Graphics & Print Solutions';
-const SHOP_ADDRESS = '612/2/A, Kandy Road, Eldeniya, Kadawatha';
-const SHOP_PHONE   = '0112 927 635 | 0706 812 220';
+const SHOP_NAME    = 'KALANI GRAPHICS AND PRINT SOLUTIONS';
+const SHOP_REG      = 'REG:WK17639';
+const SHOP_ADDRESS_LINES = ['163/43, 4th Lane,', 'Bangalawattha,', 'Kirillawala,', 'Kadawatha.'];
+const SHOP_PHONES   = ['0706812220', '0743317681'];
+const SHOP_ADDRESS = SHOP_ADDRESS_LINES.join(' ');
+const SHOP_PHONE   = SHOP_PHONES.join(' | ');
+const BANK_NAME     = 'BANK OF CEYLON - KADAWATHA';
+const BANK_ACCOUNT  = '0090187084';
+const LOGO_ASPECT   = 1064 / 1478;
+
+// Cache the logo as a data URL so jsPDF can embed it without a per-invoice fetch
+let logoDataUrlPromise: Promise<string> | null = null;
+function loadLogoDataUrl(): Promise<string> {
+  if (!logoDataUrlPromise) {
+    logoDataUrlPromise = fetch(kalaniLogo)
+      .then(res => res.blob())
+      .then(blob => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }));
+  }
+  return logoDataUrlPromise;
+}
 
 // ── Colour palette for PDF only
 type RGB = [number, number, number];
@@ -48,12 +71,23 @@ interface CIData {
   discount_total: number;
   tax_rate: number;
   payment_type: 'cash' | 'credit';
+  terms: string;
+  due_date: string;
+  po_number: string;
+  job_title: string;
+  advance_label: string;
+  advance_amount: number;
+  other_label: string;
+  other_amount: number;
+  prepared_by: string;
 }
 
-function downloadCustomInvoicePDF(data: CIData) {
+async function downloadCustomInvoicePDF(data: CIData) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-  const W = 210, H = 297, ML = 14, MR = 14, CW = W - ML - MR;
+  const W = 210, H = 297, ML = 14, MR = 14, CW = W - ML - MR, RX = W - MR;
   const isCredit = data.payment_type === 'credit';
+  const black: RGB = [20, 20, 20];
+  const pink: RGB  = [250, 205, 205];
 
   const fill   = (c: RGB) => doc.setFillColor(c[0], c[1], c[2]);
   const ink    = (c: RGB) => doc.setTextColor(c[0], c[1], c[2]);
@@ -61,146 +95,222 @@ function downloadCustomInvoicePDF(data: CIData) {
   const n      = (v: number | string) => Number(v).toFixed(2);
   const lkr    = (v: number | string) => `LKR ${n(v)}`;
   const bold   = () => doc.setFont('helvetica', 'bold');
+  const italic = () => doc.setFont('helvetica', 'italic');
   const normal = () => doc.setFont('helvetica', 'normal');
   const sz     = (s: number) => doc.setFontSize(s);
   const hline  = (y: number, x1 = ML, x2 = W - MR, lw = 0.3) => {
     stroke(C.border); doc.setLineWidth(lw); doc.line(x1, y, x2, y);
   };
+  const dline  = (x1: number, x2: number, y: number) => {
+    stroke(C.muted); doc.setLineWidth(0.2); doc.setLineDashPattern([0.8, 0.8], 0);
+    doc.line(x1, y, x2, y); doc.setLineDashPattern([], 0);
+  };
+  const displayDate = (s: string) => s
+    ? new Date(s).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '';
 
-  // 1. HEADER BANNER
-  fill(C.navy); doc.rect(0, 0, W, 42, 'F');
-  fill(isCredit ? C.orange : C.blue); doc.rect(W - 6, 0, 6, 42, 'F');
-  bold(); sz(17); ink(C.white); doc.text(SHOP_NAME, ML, 16);
-  normal(); sz(8.5); ink(C.steel);
-  doc.text(SHOP_ADDRESS, ML, 24);
-  doc.text(SHOP_PHONE, ML, 30.5);
-  fill(isCredit ? C.orange : C.blue); doc.rect(W - 70, 8, 58, 16, 'F');
-  bold(); sz(13); ink(C.white);
-  doc.text(isCredit ? 'CREDIT INVOICE' : 'INVOICE', W - 41, 19, { align: 'center' });
-  fill(isCredit ? C.orange : C.blue); doc.rect(0, 42, W - 6, 1.5, 'F');
+  let logoData: string | null = null;
+  try { logoData = await loadLogoDataUrl(); } catch { /* logo optional */ }
 
-  // 2. META
-  const metaY = 50;
-  bold(); sz(8); ink(C.muted); doc.text('INVOICE NO.', ML, metaY);
-  bold(); sz(11); ink(C.navy); doc.text(data.invoice_number, ML, metaY + 6);
-  const displayDate = new Date(data.invoice_date).toLocaleDateString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-  });
-  normal(); sz(8); ink(C.muted); doc.text(displayDate, ML, metaY + 13);
+  // 1. LETTERHEAD
+  bold(); sz(15); ink(black);
+  const kg = 'KALANI GRAPHICS '; const and = 'AND'; const ps = ' PRINT SOLUTIONS';
+  doc.text(kg, ML, 16);
+  const kgW = doc.getTextWidth(kg);
+  ink(C.red); doc.text(and, ML + kgW, 16);
+  const andW = doc.getTextWidth(and);
+  ink(black); doc.text(ps, ML + kgW + andW, 16);
 
-  // Payment type badge
-  fill(isCredit ? C.orange : [34, 139, 34]); doc.rect(ML, metaY + 17, isCredit ? 32 : 24, 7, 'F');
-  bold(); sz(7); ink(C.white);
-  doc.text(isCredit ? 'CREDIT SALE' : 'CASH PAID', ML + (isCredit ? 16 : 12), metaY + 22.5, { align: 'center' });
+  bold(); sz(8); ink(black); doc.text(SHOP_REG, ML, 22);
+  normal(); sz(8); ink(C.muted);
+  let leftY = 27;
+  SHOP_ADDRESS_LINES.forEach(line => { doc.text(line, ML, leftY); leftY += 4.2; });
+  SHOP_PHONES.forEach(p => { doc.text(p, ML, leftY); leftY += 4.2; });
 
-  const RX = W - MR;
-  if (data.customer_name) {
-    bold(); sz(8); ink(C.muted); doc.text('BILL TO', RX, metaY, { align: 'right' });
-    bold(); sz(10); ink(C.navy); doc.text(data.customer_name, RX, metaY + 6, { align: 'right' });
-    normal(); sz(8); ink(C.text);
-    if (data.customer_address) { doc.text(data.customer_address, RX, metaY + 12, { align: 'right' }); }
-    if (data.customer_phone)   { doc.text(data.customer_phone, RX, metaY + (data.customer_address ? 18 : 12), { align: 'right' }); }
+  if (logoData) {
+    const logoW = 42, logoH = logoW * LOGO_ASPECT;
+    try { doc.addImage(logoData, 'PNG', RX - logoW, 8, logoW, logoH); } catch { /* ignore bad image */ }
   }
-  hline(metaY + 28, ML, W - MR, 0.5);
 
-  // 3. ITEMS TABLE
-  const TBL_TOP = metaY + 34;
-  const ROW_H   = 8.5;
-  const hasDisc = data.items.some(i => i.discount > 0);
-  const COL = { num: ML, desc: ML + 10, qty: ML + 105, price: ML + 135, disc: ML + 158, total: W - MR };
+  // 2. META (right-aligned, below logo)
+  const metaLine = (label: string, value: string, y: number, valSz = 9) => {
+    if (!value) return;
+    bold(); sz(valSz); ink(C.navy);
+    const vW = doc.getTextWidth(value);
+    doc.text(value, RX, y, { align: 'right' });
+    normal(); sz(8); ink(C.muted);
+    doc.text(`${label}  `, RX - vW, y, { align: 'right' });
+  };
+  let metaY = 44;
+  metaLine('Invoice #', data.invoice_number, metaY, 11); metaY += 6.5;
+  metaLine('Date :', displayDate(data.invoice_date), metaY); metaY += 5.5;
+  if (data.terms)     { metaLine('Terms :', data.terms, metaY); metaY += 5.5; }
+  if (data.due_date)  { metaLine('Due Date :', displayDate(data.due_date), metaY); metaY += 5.5; }
+  if (data.po_number) { metaLine('PO NO:', data.po_number, metaY); metaY += 5.5; }
 
-  fill(C.navy); doc.rect(ML, TBL_TOP, CW, 9, 'F');
+  let rowY = Math.max(leftY, metaY) + 4;
+
+  // 3. INVOICE / BILL TO
+  bold(); sz(13); ink(C.red); doc.text('INVOICE', ML, rowY); rowY += 6;
+  bold(); sz(9); ink(black); doc.text('BILL TO', ML, rowY); rowY += 5;
+  normal(); sz(9); ink(black);
+  if (data.customer_name)   { bold(); doc.text(data.customer_name, ML, rowY); rowY += 4.5; normal(); }
+  if (data.customer_address) { doc.text(data.customer_address, ML, rowY); rowY += 4.5; }
+  if (data.customer_phone)   { doc.text(data.customer_phone, ML, rowY); rowY += 4.5; }
+  rowY += 2;
+
+  // Payment type badge (kept from prior design — quick cash/credit indicator)
+  fill(isCredit ? C.orange : [34, 139, 34]);
+  doc.rect(ML, rowY, isCredit ? 30 : 24, 6.5, 'F');
+  bold(); sz(7); ink(C.white);
+  doc.text(isCredit ? 'CREDIT SALE' : 'CASH PAID', ML + (isCredit ? 15 : 12), rowY + 4.5, { align: 'center' });
+  rowY += 11;
+
+  // 4. COMMENTS / SPECIAL INSTRUCTIONS
+  if (data.job_title || data.notes.trim()) {
+    bold(); sz(8.5); ink(C.navy); doc.text('COMMENTS OR SPECIAL INSTRUCTIONS', ML, rowY); rowY += 5;
+    normal(); sz(9); ink(black);
+    if (data.job_title) { bold(); doc.text(data.job_title, ML, rowY); rowY += 5; normal(); }
+  }
+  rowY += 2;
+
+  // 5. ITEMS TABLE
+  const COL = { date: ML, desc: ML + 22, qty: ML + 104, price: ML + 144, total: W - MR };
+
+  fill(C.navy); doc.rect(ML, rowY, CW, 8, 'F');
   bold(); sz(8); ink(C.white);
-  doc.text('#',           COL.num  + 1, TBL_TOP + 6);
-  doc.text('DESCRIPTION', COL.desc,     TBL_TOP + 6);
-  doc.text('QTY',         COL.qty,      TBL_TOP + 6, { align: 'center' });
-  doc.text('UNIT PRICE',  COL.price,    TBL_TOP + 6, { align: 'right' });
-  if (hasDisc) doc.text('DISC.', COL.disc, TBL_TOP + 6, { align: 'right' });
-  doc.text('TOTAL',       COL.total,    TBL_TOP + 6, { align: 'right' });
+  doc.text('DATE',        COL.date + 1, rowY + 5.5);
+  doc.text('DESCRIPTION', COL.desc,     rowY + 5.5);
+  doc.text('QTY',         COL.qty,      rowY + 5.5, { align: 'center' });
+  doc.text('UNIT RATE',   COL.price,    rowY + 5.5, { align: 'right' });
+  doc.text('AMOUNT',      COL.total,    rowY + 5.5, { align: 'right' });
+  rowY += 8;
 
-  let rowY = TBL_TOP + 9;
+  const descW = COL.qty - COL.desc - 6;
+  // Shading must be painted before the row's text, otherwise the fill covers it.
+  let zebraToggle = false;
+  const startRow = (h: number) => {
+    if (zebraToggle) { fill(C.rowEven); doc.rect(ML, rowY, CW, h, 'F'); }
+    zebraToggle = !zebraToggle;
+  };
+
+  if (data.job_title) {
+    startRow(8);
+    normal(); sz(8); ink(C.muted); doc.text(displayDate(data.invoice_date), COL.date + 1, rowY + 5.5);
+    bold(); sz(9); ink(black); doc.text(data.job_title, COL.desc, rowY + 5.5);
+    rowY += 8;
+  }
+  if (data.notes.trim()) {
+    const noteLines = doc.splitTextToSize(data.notes.trim(), descW);
+    const h = noteLines.length * 4.2 + 3;
+    startRow(h);
+    italic(); sz(8); ink(C.muted);
+    doc.text(noteLines, COL.desc, rowY + 5);
+    rowY += h;
+  }
+
   normal(); sz(9);
-  data.items.forEach((item, idx) => {
-    if (idx % 2 === 0) { fill(C.rowEven); doc.rect(ML, rowY, CW, ROW_H, 'F'); }
-    ink(C.muted); doc.text(String(idx + 1), COL.num + 1, rowY + 5.5);
-    ink(C.text); bold();
-    const desc = item.description.length > (hasDisc ? 34 : 42)
-      ? item.description.slice(0, hasDisc ? 32 : 40) + '..'
-      : item.description;
-    doc.text(desc, COL.desc, rowY + 5.5);
-    normal(); ink(C.text);
-    doc.text(String(item.qty),         COL.qty,   rowY + 5.5, { align: 'center' });
-    doc.text(lkr(item.unit_price),     COL.price, rowY + 5.5, { align: 'right' });
-    if (hasDisc) {
-      ink(item.discount > 0 ? C.red : C.muted);
-      doc.text(item.discount > 0 ? `-${lkr(item.discount)}` : '—', COL.disc, rowY + 5.5, { align: 'right' });
-    }
+  data.items.forEach(item => {
+    const lineLines = doc.splitTextToSize(item.description, descW);
+    const rowH = Math.max(8, lineLines.length * 4.2 + 3);
+    startRow(rowH);
+    ink(black); normal();
+    doc.text(lineLines, COL.desc, rowY + 5);
+    doc.text(String(item.qty), COL.qty, rowY + 5, { align: 'center' });
+    doc.text(lkr(item.unit_price), COL.price, rowY + 5, { align: 'right' });
     const lineTotal = item.qty * item.unit_price - item.discount;
-    ink(C.text); bold();
-    doc.text(lkr(lineTotal), COL.total, rowY + 5.5, { align: 'right' });
-    rowY += ROW_H;
+    doc.text(lkr(lineTotal), COL.total, rowY + 5, { align: 'right' });
+    rowY += rowH;
   });
-  hline(rowY, ML, W - MR, 0.4); rowY += 6;
+  hline(rowY, ML, W - MR, 0.5); rowY += 6;
 
-  // 4. TOTALS
+  // 6. TOTALS + CONTACT BOX (side by side)
   const itemSubtotal  = data.items.reduce((s, i) => s + i.qty * i.unit_price, 0);
   const itemDiscTotal = data.items.reduce((s, i) => s + i.discount, 0);
   const afterItemDisc = itemSubtotal - itemDiscTotal;
   const afterBillDisc = afterItemDisc - data.discount_total;
   const taxAmount     = (afterBillDisc * data.tax_rate) / 100;
   const grandTotal    = afterBillDisc + taxAmount;
-  const TOT_LEFT      = W - MR - 80;
+  const balanceDue    = grandTotal - (data.advance_amount || 0) - (data.other_amount || 0);
+  const TOT_LEFT      = W - MR - 78;
+  const totTop        = rowY;
 
-  const addTotRow = (label: string, value: string, color: RGB = C.text, bold_ = false) => {
+  bold(); sz(8.5); ink(C.muted); doc.text('BALANCE DUE', ML, rowY);
+
+  const addTotRow = (label: string, value: string, color: RGB = black, bold_ = false) => {
     bold_ ? bold() : normal(); sz(9);
     ink(C.muted); doc.text(label, TOT_LEFT, rowY);
     bold_ ? bold() : normal(); ink(color);
     doc.text(value, W - MR, rowY, { align: 'right' });
-    rowY += 6;
+    rowY += 5.5;
   };
   addTotRow('Subtotal', lkr(itemSubtotal));
-  if (itemDiscTotal > 0)      addTotRow('Item Discounts', `-${lkr(itemDiscTotal)}`, C.red);
+  if (itemDiscTotal > 0)       addTotRow('Item Discounts', `-${lkr(itemDiscTotal)}`, C.red);
   if (data.discount_total > 0) addTotRow('Bill Discount', `-${lkr(data.discount_total)}`, C.red);
-  if (data.tax_rate > 0)      addTotRow(`Tax (${data.tax_rate}%)`, lkr(taxAmount));
+  addTotRow('Tax Rate', `${n(data.tax_rate)}%`);
+  if (data.advance_amount > 0) addTotRow(data.advance_label || 'Advance', `-${lkr(data.advance_amount)}`, C.red);
+  if (data.other_amount !== 0) addTotRow(data.other_label || 'Other', lkr(data.other_amount));
 
-  rowY += 1;
+  rowY += 0.5;
   fill(isCredit ? C.orange : C.navy);
-  doc.rect(TOT_LEFT - 4, rowY - 1, W - MR - TOT_LEFT + 4 + MR, 11, 'F');
+  doc.rect(TOT_LEFT - 4, rowY - 1, W - MR - TOT_LEFT + 4 + MR, 9, 'F');
   bold(); sz(10); ink(C.white);
-  doc.text(isCredit ? 'BALANCE DUE' : 'TOTAL DUE', TOT_LEFT, rowY + 7);
-  sz(12); doc.text(lkr(grandTotal), W - MR, rowY + 7, { align: 'right' });
-  rowY += 18;
+  doc.text('BALANCE DUE', TOT_LEFT, rowY + 6);
+  doc.text(lkr(balanceDue), W - MR, rowY + 6, { align: 'right' });
+  rowY += 9;
 
-  // Credit notice
-  if (isCredit) {
-    fill([255, 243, 224]); doc.rect(ML, rowY, CW, 10, 'F');
-    stroke(C.orange); doc.setLineWidth(0.5); doc.rect(ML, rowY, CW, 10, 'S');
-    bold(); sz(8.5); ink(C.orange);
-    doc.text('This is a CREDIT sale. Payment is due upon agreement.', ML + CW / 2, rowY + 6.5, { align: 'center' });
-    rowY += 16;
+  // Contact box (left column, aligned with totals block)
+  normal(); sz(8); ink(black);
+  const contactLines = doc.splitTextToSize('If you have any questions concerning this Invoice, please contact', TOT_LEFT - ML - 6);
+  doc.text(contactLines, ML, totTop + 6);
+  if (data.prepared_by || SHOP_PHONE) {
+    doc.text(`${data.prepared_by ? data.prepared_by + ' - ' : ''}${SHOP_PHONE}`, ML, totTop + 6 + contactLines.length * 4);
   }
 
-  // 5. NOTES
-  if (data.notes.trim()) {
-    stroke(C.border); doc.setLineWidth(0.3);
-    doc.rect(ML, rowY, CW, 0.3, 'F');
-    rowY += 4;
-    bold(); sz(8.5); ink(C.navy); doc.text('NOTES / TERMS', ML, rowY); rowY += 6;
-    normal(); sz(8.5); ink(C.text);
-    const lines = doc.splitTextToSize(data.notes, CW);
-    doc.text(lines, ML, rowY);
-    rowY += lines.length * 5;
-  }
+  rowY += 6;
 
-  // 6. FOOTER
-  const FY = H - 20;
-  fill(C.navy); doc.rect(0, FY - 3, W, 23, 'F');
-  fill(isCredit ? C.orange : C.blue); doc.rect(0, FY - 3, W, 1.5, 'F');
-  bold(); sz(9.5); ink(C.white);
-  doc.text(`Thank you for choosing ${SHOP_NAME}!`, W / 2, FY + 5, { align: 'center' });
-  normal(); sz(8); ink(C.steel);
-  doc.text(SHOP_ADDRESS, W / 2, FY + 11, { align: 'center' });
-  doc.text(SHOP_PHONE,   W / 2, FY + 16, { align: 'center' });
+  // 7. BANK TRANSFER NOTICE
+  fill(pink);
+  const bankLines = [
+    'Transfer the amount to the business account below.',
+    `NOTE - CHEQUE SHOULD BE DRAWN IN FAVOUR OF - ${SHOP_NAME}`,
+    `ACCOUNT NUMBER - ${BANK_ACCOUNT} - ${BANK_NAME}`,
+    'THANK YOU FOR YOUR BUSINESS',
+  ];
+  const bankBoxH = bankLines.length * 4.6 + 6;
+  doc.rect(ML, rowY, CW, bankBoxH, 'F');
+  bold(); sz(8); ink(C.red);
+  let by = rowY + 5.5;
+  bankLines.forEach(l => { doc.text(l, ML + 3, by); by += 4.6; });
+  rowY += bankBoxH + 10;
+
+  // 8. SIGNATURES
+  const sigColW = CW / 2 - 6;
+  if (data.prepared_by) { italic(); sz(9); ink(black); doc.text(data.prepared_by, ML, rowY - 2); }
+  normal(); sz(8); ink(black); doc.text(displayDate(data.invoice_date), ML + sigColW + 12, rowY - 2);
+  dline(ML, ML + sigColW, rowY);
+  dline(ML + sigColW + 12, W - MR, rowY);
+  bold(); sz(7.5); ink(C.muted);
+  doc.text('PREPARED BY', ML, rowY + 4.5);
+  doc.text('DATE', ML + sigColW + 12, rowY + 4.5);
+  rowY += 14;
+
+  bold(); sz(8.5); ink(black); doc.text('Goods received by', ML, rowY); rowY += 8;
+  dline(ML, ML + sigColW, rowY);
+  dline(ML + sigColW + 12, W - MR, rowY);
+  bold(); sz(7.5); ink(C.muted);
+  doc.text('CUSTOMER SIGNATURE', ML, rowY + 4.5);
+  doc.text('DATE/TIME', ML + sigColW + 12, rowY + 4.5);
+  rowY += 4.5;
+
+  // 9. FOOTER — pinned near the bottom, but pushed down further if content ran long
+  const FY = Math.max(H - 16, rowY + 10);
+  hline(FY - 6, ML, W - MR, 0.3);
+  bold(); sz(8); ink(black);
+  if (data.job_title) doc.text(data.job_title, W / 2, FY - 1, { align: 'center' });
+  sz(7.5); ink(C.muted);
+  doc.text(SHOP_NAME, W / 2, FY + 4, { align: 'center' });
+  doc.text(SHOP_REG, W / 2, FY + 8.5, { align: 'center' });
 
   doc.save(`Invoice-${data.invoice_number}.pdf`);
 }
@@ -215,6 +325,11 @@ function genInvoiceNumber() {
 const today = () => new Date().toISOString().slice(0, 10);
 const fmt   = (n: number | string) => Number(n).toFixed(2);
 const fmtDate = (s: string) => new Date(s).toLocaleString();
+const addDays = (dateStr: string, days: number) => {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
 
 // ─────────────────────────────────────────────
 // Custom Invoice Tab
@@ -238,6 +353,17 @@ function CustomInvoiceTab() {
   const [taxRate, setTaxRate]             = useState(0);
   const [paymentType, setPaymentType]     = useState<'cash' | 'credit'>('cash');
   const [saving, setSaving]               = useState(false);
+
+  // PDF-only fields (not persisted to the backend invoice record)
+  const [jobTitle, setJobTitle]           = useState('');
+  const [terms, setTerms]                 = useState('7 DAYS');
+  const [dueDate, setDueDate]             = useState(() => addDays(today(), 7));
+  const [poNumber, setPoNumber]           = useState('');
+  const [advanceLabel, setAdvanceLabel]   = useState('Advance');
+  const [advanceAmount, setAdvanceAmount] = useState(0);
+  const [otherLabel, setOtherLabel]       = useState('Other');
+  const [otherAmount, setOtherAmount]     = useState(0);
+  const [preparedBy, setPreparedBy]       = useState('');
 
   // Autocomplete state
   const [suggestions, setSuggestions]       = useState<CustomerSuggestion[]>([]);
@@ -328,6 +454,15 @@ function CustomInvoiceTab() {
       discount_total  : billDiscount,
       tax_rate        : taxRate,
       payment_type    : paymentType,
+      terms           : terms.trim(),
+      due_date        : dueDate,
+      po_number       : poNumber.trim(),
+      job_title       : jobTitle.trim(),
+      advance_label   : advanceLabel.trim(),
+      advance_amount  : advanceAmount,
+      other_label     : otherLabel.trim(),
+      other_amount    : otherAmount,
+      prepared_by     : preparedBy.trim(),
     };
 
     setSaving(true);
@@ -346,13 +481,16 @@ function CustomInvoiceTab() {
         tax_rate        : ciData.tax_rate,
         notes           : ciData.notes,
       });
-      downloadCustomInvoicePDF(ciData);
+      await downloadCustomInvoicePDF(ciData);
       toast.success(paymentType === 'credit' ? 'Credit invoice saved & PDF downloaded' : 'Invoice saved & PDF downloaded');
       setInvoiceNumber(genInvoiceNumber());
       setCustomerName(''); setCustomerAddr(''); setCustomerPhone('');
       setNotes(''); setBillDiscount(0); setTaxRate(0);
       setPaymentType('cash'); setCreditHistory(null);
       setLines([{ id: Date.now(), description: '', qty: 1, unit_price: 0, discount: 0 }]);
+      setJobTitle(''); setTerms('7 DAYS'); setDueDate(addDays(today(), 7));
+      setPoNumber(''); setAdvanceLabel('Advance'); setAdvanceAmount(0);
+      setOtherLabel('Other'); setOtherAmount(0); setPreparedBy('');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Failed to save invoice');
     } finally {
@@ -482,6 +620,54 @@ function CustomInvoiceTab() {
             <label className="label">Phone</label>
             <input className="input" value={customerPhone}
               onChange={e => setCustomerPhone(e.target.value)} placeholder="07X XXX XXXX" />
+          </div>
+        </div>
+      </div>
+
+      {/* Job & payment terms (printed on the invoice PDF) */}
+      <div className="card p-5 space-y-4">
+        <p className="text-xs font-semibold text-surface-500 uppercase tracking-wider">Job &amp; Payment Terms</p>
+        <div>
+          <label className="label">Job Title</label>
+          <input className="input" value={jobTitle} onChange={e => setJobTitle(e.target.value)}
+            placeholder="e.g. Ground Floor Stickering" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="label">Terms</label>
+            <input className="input" value={terms} onChange={e => setTerms(e.target.value)} placeholder="7 DAYS" />
+          </div>
+          <div>
+            <label className="label">Due Date</label>
+            <input type="date" className="input" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">PO No.</label>
+            <input className="input" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Prepared By</label>
+            <input className="input" value={preparedBy} onChange={e => setPreparedBy(e.target.value)} />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div>
+            <label className="label">Advance Label</label>
+            <input className="input" value={advanceLabel} onChange={e => setAdvanceLabel(e.target.value)} placeholder="50% Advance" />
+          </div>
+          <div>
+            <label className="label">Advance Amount (LKR)</label>
+            <input type="number" min={0} step={0.01} className="input"
+              value={advanceAmount || ''} onChange={e => setAdvanceAmount(parseFloat(e.target.value) || 0)} />
+          </div>
+          <div>
+            <label className="label">Other Label</label>
+            <input className="input" value={otherLabel} onChange={e => setOtherLabel(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Other Amount (LKR)</label>
+            <input type="number" step={0.01} className="input"
+              value={otherAmount || ''} onChange={e => setOtherAmount(parseFloat(e.target.value) || 0)} />
           </div>
         </div>
       </div>
