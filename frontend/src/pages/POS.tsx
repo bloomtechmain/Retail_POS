@@ -759,6 +759,8 @@ function blankLine(): ServiceLine {
   return { id: Date.now() + Math.random(), name: '', qty: '1', price: '', discount: '', taxRate: '0' };
 }
 
+const QUICK_SERVICE_NAMES = ['Laminating', 'Photo Copy', 'Printout', 'Typesetting'];
+
 function ServiceItemModal({ isOpen, onClose, onAddAll }: {
   isOpen: boolean;
   onClose: () => void;
@@ -766,6 +768,8 @@ function ServiceItemModal({ isOpen, onClose, onAddAll }: {
 }) {
   const [lines, setLines] = useState<ServiceLine[]>([blankLine()]);
   const firstNameRef = useRef<HTMLInputElement>(null);
+  const priceRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const [focusPriceId, setFocusPriceId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -774,10 +778,30 @@ function ServiceItemModal({ isOpen, onClose, onAddAll }: {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (focusPriceId != null) {
+      priceRefs.current[focusPriceId]?.focus();
+      setFocusPriceId(null);
+    }
+  }, [focusPriceId, lines]);
+
   const updateLine = (id: number, field: keyof ServiceLine, value: string) =>
     setLines(prev => prev.map(l => l.id === id ? { ...l, [field]: value } : l));
 
   const addLine = () => setLines(prev => [...prev, blankLine()]);
+
+  const quickAddName = (name: string) => {
+    setLines(prev => {
+      const emptyLine = prev.find(l => !l.name.trim());
+      if (emptyLine) {
+        setFocusPriceId(emptyLine.id);
+        return prev.map(l => l.id === emptyLine.id ? { ...l, name } : l);
+      }
+      const newLine = { ...blankLine(), name };
+      setFocusPriceId(newLine.id);
+      return [...prev, newLine];
+    });
+  };
 
   const removeLine = (id: number) =>
     setLines(prev => prev.length > 1 ? prev.filter(l => l.id !== id) : prev);
@@ -802,7 +826,7 @@ function ServiceItemModal({ isOpen, onClose, onAddAll }: {
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Add Service Items" size="lg"
+    <Modal isOpen={isOpen} onClose={onClose} title="Add Service Items" size="full"
       footer={
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm text-surface-600">
@@ -824,6 +848,21 @@ function ServiceItemModal({ isOpen, onClose, onAddAll }: {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
           </svg>
           Service items don't deduct stock — billed as service charges only. Add as many as needed.
+        </div>
+
+        {/* Quick service names */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-surface-500 uppercase tracking-wide">Quick add:</span>
+          {QUICK_SERVICE_NAMES.map(name => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => quickAddName(name)}
+              className="px-3 py-1.5 rounded-full text-sm font-medium bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100 transition-colors"
+            >
+              {name}
+            </button>
+          ))}
         </div>
 
         {/* Column headers */}
@@ -852,6 +891,7 @@ function ServiceItemModal({ isOpen, onClose, onAddAll }: {
                 className="input py-1.5 text-sm text-center"
               />
               <input
+                ref={el => { priceRefs.current[line.id] = el; }}
                 type="number" min={0} step={0.01}
                 value={line.price}
                 onChange={e => updateLine(line.id, 'price', e.target.value)}
